@@ -807,10 +807,12 @@ def _emit_json(emit_dir, polled_at, records, cfg):
             days.append({"date": fn[:-7], "records": n})
     with open(os.path.join(hist_dir, "index.json"), "w") as f:
         json.dump({"days": days}, f, separators=(",", ":"))
-    # copy the DC layer alongside so the page has one data root
-    if os.path.exists(DC_PATH):
-        with open(DC_PATH) as fin, open(os.path.join(emit_dir, "datacenters.json"), "w") as fout:
-            fout.write(fin.read())
+    # copy the DC + infrastructure layers alongside so the page has one data root
+    for src_name in ("datacenters.json", "infrastructure.json"):
+        p = os.path.join(BASE_DIR, src_name)
+        if os.path.exists(p):
+            with open(p) as fin, open(os.path.join(emit_dir, src_name), "w") as fout:
+                fout.write(fin.read())
     print(f"[i] emitted {len(records)} records -> {emit_dir}/latest.json "
           f"+ history/{day}.ndjson")
 
