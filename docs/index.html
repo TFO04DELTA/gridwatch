@@ -100,6 +100,9 @@
           <button id="csv">Export CSV</button>
         </div>
         <div class="meta" id="live-meta" style="margin-top:8px">loading…</div></div>
+      <div class="card"><h2>Top events</h2>
+        <table id="topev"><thead><tr><th>reg</th><th>cause</th>
+        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
       <div class="card"><h2>Sites & layers</h2><div id="sitelist"></div></div>
     </div>
 
@@ -192,10 +195,10 @@ const map = L.map("map").setView([40.7,-82.4], 7);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
   {attribution:"&copy; OSM &copy; CARTO",maxZoom:18}).addTo(map);
 
-let DCS=[],AUTO=[],INFRA=[],RADIUS=8,groups={},LATEST=null,INDEX={days:[]},
+let DCS=[],AUTO=[],INFRA=[],PLINES=[],RADIUS=8,groups={},LATEST=null,INDEX={days:[]},
     activeRegions=new Set(), currentView="live";
 const dcLayer=L.layerGroup().addTo(map), autoLayer=L.layerGroup(),
-      infraLayer=L.layerGroup().addTo(map);
+      infraLayer=L.layerGroup().addTo(map), plineLayer=L.layerGroup();
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hav=(a,b,c,d)=>{const R=6371,p=Math.PI/180,
   x=Math.sin((c-a)*p/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin((d-b)*p/2)**2;
@@ -241,6 +244,16 @@ function plot(outages, metaEl, label){
   document.getElementById("s-big").textContent=shown.length?fmt(Math.max(...shown.map(o=>o.customers||0))):"0";
   document.getElementById("s-reg").textContent=new Set(shown.map(o=>o.region)).size;
   window._shown=shown;
+  const tb=document.querySelector("#topev tbody");
+  if(tb){tb.innerHTML="";
+    shown.slice().sort((a,b)=>(b.customers||0)-(a.customers||0)).slice(0,8)
+      .forEach(o=>{const tr=document.createElement("tr");
+        tr.style.cursor="pointer";
+        tr.innerHTML=`<td>${esc(o.region)}</td>
+          <td>${esc((o.cause||o.classification).slice(0,26))}</td>
+          <td class="n">${fmt(o.customers||0)}</td>`;
+        tr.onclick=()=>map.setView([o.lat,o.lon],12);
+        tb.appendChild(tr);});}
 }
 
 function regionChips(){
@@ -264,7 +277,8 @@ function drawDCs(){
     if(!s.lat) continue;
     const isCtl=s.status==="control", isOp=(s.status||"").startsWith("operating");
     const col=isCtl?"#64748b":isOp?"#dc8ca6":"#ef4444";
-    if(!isOp) L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:col,weight:1,fillOpacity:.05}).addTo(dcLayer);
+    L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:col,weight:1,
+      fillOpacity:isOp?0:.05,dashArray:isOp?"6 7":null,opacity:isOp?.5:1}).addTo(dcLayer);
     L.circleMarker([s.lat,s.lon],{radius:5,color:col,fillColor:isCtl?"#334155":isOp?"#6d2438":"#7f1d1d",
       fillOpacity:1,weight:2})
       .bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.operator)} — ${esc(s.status)}<br>
@@ -308,6 +322,27 @@ function drawInfra(){
     <span>Grid upgrade projects (⚡)</span><span class="cnt">${INFRA.length}</span>`;
   row.onclick=()=>{if(map.hasLayer(infraLayer)){map.removeLayer(infraLayer);row.classList.add("off");}
     else{map.addLayer(infraLayer);row.classList.add("on"),row.classList.remove("off");}};
+  document.getElementById("sitelist").appendChild(row);
+}
+
+function drawPlines(){
+  plineLayer.clearLayers();
+  for(const l of PLINES){
+    const kv=parseInt(String(l.voltage).split(";")[0])||0;
+    const col=kv>=200000?"#e879f9":kv>=100000?"#fb923c":"#9ca3af";
+    L.polyline(l.geom,{color:col,weight:kv>=200000?3:2,opacity:.75})
+      .bindPopup(`<b>⚡ ${esc(l.name)||"transmission line"}</b><br>
+        ${l.voltage?esc(String(l.voltage).replace(/000$/,""))+" kV":"voltage unmapped"}
+        ${l.operator?" — "+esc(l.operator):""}<br>
+        <span style="color:#8a90a2;font-size:11px">OSM way/${l.id} — nearby ≠ feeding;
+        the interconnection docket names the actual feed</span>`)
+      .addTo(plineLayer);}
+  if(!PLINES.length) return;
+  const row=document.createElement("div"); row.className="row off";
+  row.innerHTML=`<span class="dot" style="background:#fb923c"></span>
+    <span>Transmission lines near sites (OSM)</span><span class="cnt">${PLINES.length}</span>`;
+  row.onclick=()=>{if(map.hasLayer(plineLayer)){map.removeLayer(plineLayer);row.classList.add("off");}
+    else{map.addLayer(plineLayer);row.classList.remove("off");}};
   document.getElementById("sitelist").appendChild(row);
 }
 
@@ -437,15 +472,17 @@ async function refresh(){
 }
 
 async function boot(){
-  const [latest,dcs,auto,infra]=await Promise.all([
+  const [latest,dcs,auto,infra,plines]=await Promise.all([
     fetch("data/latest.json").then(r=>r.json()),
     fetch("data/datacenters.json").then(r=>r.json()).catch(()=>({sites:[]})),
     fetch("data/datacenters_auto.json").then(r=>r.json()).catch(()=>({sites:[]})),
     fetch("data/infrastructure.json").then(r=>r.json()).catch(()=>({projects:[]})),
+    fetch("data/powerlines.json").then(r=>r.json()).catch(()=>({lines:[]})),
   ]);
   LATEST=latest;DCS=dcs.sites||[];AUTO=auto.sites||[];INFRA=infra.projects||[];
+  PLINES=plines.lines||[];
   RADIUS=latest.dc_radius_km||8;
-  drawDCs();drawAuto();drawInfra();regionChips();
+  drawDCs();drawAuto();drawInfra();drawPlines();regionChips();
   plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
   try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());}
   catch(e){INDEX={days:[]};}
