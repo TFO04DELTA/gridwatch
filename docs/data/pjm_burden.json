@@ -1,0 +1,54 @@
+{
+  "_notes": [
+    "PJM capacity market + cost-shift receipts. Annual data \u2014 update after each Base Residual Auction. All figures sourced; keep sources current."
+  ],
+  "auctions": [
+    {
+      "dy": "2024/25",
+      "rto": 28.92,
+      "note": "auction held Dec 2022, pre-AI-forecast surge"
+    },
+    {
+      "dy": "2025/26",
+      "rto": 269.92,
+      "dom": 444.26,
+      "bge": 466.35,
+      "note": "+833% \u2014 sharpest jump in PJM history; Market Monitor: data centers drove 63% of the increase ($9.3B)"
+    },
+    {
+      "dy": "2026/27",
+      "rto": 329.17,
+      "capped": true,
+      "note": "cleared at FERC-approved cap; uncapped simulation ~$388 ($141,828/MW-yr)"
+    },
+    {
+      "dy": "2027/28",
+      "rto": 333.44,
+      "capped": true,
+      "uncapped_est": 530,
+      "note": "cap again; 6,623 MW SHORT of reliability requirement \u2014 first time ever"
+    }
+  ],
+  "kpis": {
+    "oh_monthly_bill_impact_usd": 16,
+    "dc_share_of_2526_increase": 0.63,
+    "dc_cost_2526_usd_b": 9.3,
+    "dc_transmission_subsidy_usd_b": 4.4,
+    "cumulative_2033_low_b": 100,
+    "cumulative_2033_high_b": 163
+  },
+  "mechanisms": [
+    "Shared capacity market: Ohio zones (ATSI/AEP/DEOK) and NoVA's Dominion zone clear in the same PJM auctions. Dominion's 20+ GW of forecast DC growth tightens the whole market; every Ohio ratepayer pays the clearing price.",
+    "Socialized transmission: ~$4.4B of DC-related transmission approved in 2024 alone is recovered from ratepayers across PJM, not just where the DCs are (UCS/IEEFA).",
+    "Import doubling: a Virginia-commissioned study found meeting tech forecasts would require doubling VA's imports from the rest of PJM \u2014 new generation and wires elsewhere, for load there.",
+    "Reliability erosion: 2027/28 cleared 6,623 MW below the one-in-ten standard. Record prices for a thinner margin."
+  ],
+  "counterpoint": "AEP Ohio's large-load tariff (25MW+ DCs pay >=85% of contracted capacity monthly) is the emerging cost-containment model; FE has 2.6GW contracted by 2029 under its own large-load terms. Whether tariffs actually insulate residential ratepayers is an open, testable question \u2014 PUCO rate cases are the venue.",
+  "sources": [
+    "PJM BRA results releases (pjm.com, Jul 2025 & Dec 2025)",
+    "Monitoring Analytics (Independent Market Monitor) statements, 2025",
+    "IEEFA: 'Projected data center growth spurs PJM capacity prices by factor of 10'",
+    "NRDC auction reactions 2025-2026; UCS transmission cost analysis",
+    "Utility Dive coverage Dec 2025 - Feb 2026; Latitude Media on AEP Ohio tariff"
+  ]
+}
