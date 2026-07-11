@@ -136,6 +136,26 @@
       "territory": "Ohio Edison",
       "verify": true,
       "source": "120 N Broadway St, Akron; verify operator via datacentermap"
+    },
+    {
+      "name": "Shippingport / Bruce Mansfield redevelopment (Beaver Co.)",
+      "operator": "Frontier Group of Companies / TBD",
+      "lat": 40.636,
+      "lon": -80.42,
+      "status": "announced",
+      "territory": "Penn Power (verify - Duquesne border area)",
+      "verify": true,
+      "source": "One of five western-PA gas-powered DC projects (TribLive roundup, Mar 2026). Former Bruce Mansfield coal plant site. Confirm developer + territory via Beaver Co. records."
+    },
+    {
+      "name": "Springdale / former Cheswick plant site (Allegheny Co.)",
+      "operator": "TBD",
+      "lat": 40.538,
+      "lon": -79.78,
+      "status": "announced",
+      "territory": "Duquesne Light (NOT FirstEnergy - context site)",
+      "verify": true,
+      "source": "Western-PA gas-powered DC project roundup (TribLive, Mar 2026). Duquesne territory means its outages won't appear on FE's PA map; site kept for corridor context."
     }
   ]
 }
