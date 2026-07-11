@@ -8,6 +8,10 @@ folium map. The `report` command answers the actual question longitudinally:
 is the fair-weather outage rate inside DC proximity rings elevated vs the rest
 of the territory? 
 
+## Are data centers sucking the life outta our grid? 
+
+
+
 ## Classes
 - **WEATHER-LIKELY** (blue) — gusts/wind/precip/temp-extreme/NWS alert/utility weather cause
 - **DC-PROXIMATE FAIR-WEATHER** (red) — no weather signal, within ring; darker red if the utility's own cause string looks like dig-in/vehicle/construction damage
