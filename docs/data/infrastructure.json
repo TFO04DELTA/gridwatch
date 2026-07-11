@@ -1,0 +1,50 @@
+{
+  "_notes": [
+    "FirstEnergy/ATSI transmission & substation projects. This is the 'grid work near sites' layer \u2014 construction-phase switching/cutovers on these projects are a plausible direct cause of local outages.",
+    "verify:true = town-level approximate coords. FE's Ohio transmission projects page + OPSB dockets (case numbers) give exact routes/parcels.",
+    "type: substation | line ; status: construction | planned | complete",
+    "Source of truth for additions: firstenergycorp.com/about/transmission_projects/ohio.html (also /pennsylvania.html etc.) and OPSB case search."
+  ],
+  "projects": [
+    {
+      "name": "Fulton Co. 345kV substation + 9-mi line (Delta Village area)",
+      "type": "substation",
+      "status": "construction",
+      "lat": 41.575,
+      "lon": -84.0,
+      "territory": "Toledo Edison",
+      "verify": true,
+      "source": "FE newsroom Oct 2025: new 345kV substation (in service Dec 2026) + 9-mile line, Delta/Fulton/Pike/Swan Creek/York twps; part of >$200M ATSI NW Ohio program"
+    },
+    {
+      "name": "Sylvania Twp substation expansion (Lucas Co.)",
+      "type": "substation",
+      "status": "complete",
+      "lat": 41.709,
+      "lon": -83.713,
+      "territory": "Toledo Edison",
+      "verify": true,
+      "source": "FE newsroom Oct 2024: ~$15M, 17k->49.9k sqft, sectionalized bus; in service early 2025; 20k+ customers"
+    },
+    {
+      "name": "Niles-Shenango 345kV line rebuild",
+      "type": "line",
+      "status": "construction",
+      "lat": 41.19,
+      "lon": -80.74,
+      "territory": "Ohio Edison (Mahoning Valley)",
+      "verify": true,
+      "source": "FE Ohio Transmission Projects list. Lordstown/Stargate corridor; point marks Niles end - route runs NE toward PA border"
+    },
+    {
+      "name": "Lordstown substation (built for Ultium Cells)",
+      "type": "substation",
+      "status": "complete",
+      "lat": 41.155,
+      "lon": -80.875,
+      "territory": "Ohio Edison",
+      "verify": true,
+      "source": "FE newsroom Feb 2021: $19.6M substation + 0.5-mi 138kV tie for Ultium; precedent for large-load builds at the GM site now hosting Stargate"
+    }
+  ]
+}
