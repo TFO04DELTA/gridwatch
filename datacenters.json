@@ -86,6 +86,56 @@
       "territory": "?",
       "verify": true,
       "source": "Placeholder: pick 3-4 growth corridors with active construction but NO data center, matched by county type. This is your confounder test. Delete or fill."
+    },
+    {
+      "name": "H5 Cleveland Technology Center",
+      "operator": "H5 Data Centers",
+      "lat": 41.5057,
+      "lon": -81.682,
+      "status": "operating",
+      "territory": "Illuminating Co.",
+      "verify": true,
+      "source": "1625 Rockwell Ave; 351k sqft, 10MW, carrier hotel"
+    },
+    {
+      "name": "DataBank CLE1",
+      "operator": "DataBank",
+      "lat": 41.501,
+      "lon": -81.677,
+      "status": "operating",
+      "territory": "Illuminating Co.",
+      "verify": true,
+      "source": "1255 Euclid Ave; 7.4k sqft raised floor, 0.4MW"
+    },
+    {
+      "name": "Expedient NEO (Garfield Heights)",
+      "operator": "Expedient",
+      "lat": 41.417,
+      "lon": -81.606,
+      "status": "operating",
+      "territory": "Illuminating Co.",
+      "verify": true,
+      "source": "15166 + 15248 Neo Pkwy; ~2.7MW + 2MW"
+    },
+    {
+      "name": "Expedient Independence",
+      "operator": "Expedient",
+      "lat": 41.386,
+      "lon": -81.644,
+      "status": "operating",
+      "territory": "Illuminating Co.",
+      "verify": true,
+      "source": "7500 E Pleasant Valley Rd; 37k sqft, 2MW"
+    },
+    {
+      "name": "Involta/colo Akron (120 N Broadway)",
+      "operator": "see source",
+      "lat": 41.085,
+      "lon": -81.515,
+      "status": "operating",
+      "territory": "Ohio Edison",
+      "verify": true,
+      "source": "120 N Broadway St, Akron; verify operator via datacentermap"
     }
   ]
 }
