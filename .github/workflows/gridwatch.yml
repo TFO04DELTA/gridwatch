@@ -5,13 +5,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  issues: write
 concurrency:
   group: gridwatch
   cancel-in-progress: false
 jobs:
   poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,6 +20,8 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
       - name: Poll outages and emit JSON
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python gridwatch.py poll --emit docs/data --no-db
       - name: Commit snapshot
         run: |
