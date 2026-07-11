@@ -947,7 +947,7 @@ def _emit_json(emit_dir, polled_at, records, cfg):
     with open(os.path.join(hist_dir, "index.json"), "w") as f:
         json.dump({"days": days}, f, separators=(",", ":"))
     # copy the DC + infrastructure layers alongside so the page has one data root
-    for src_name in ("datacenters.json", "infrastructure.json"):
+    for src_name in ("datacenters.json", "infrastructure.json", "pjm_burden.json"):
         p = os.path.join(BASE_DIR, src_name)
         if os.path.exists(p):
             with open(p) as fin, open(os.path.join(emit_dir, src_name), "w") as fout:
