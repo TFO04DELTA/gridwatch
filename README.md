@@ -6,7 +6,7 @@ with trailing-3h weather (Open-Meteo) and active NWS alerts, computes distance
 to each site in `datacenters.json`, classifies, logs to SQLite, and renders a
 folium map. The `report` command answers the actual question longitudinally:
 is the fair-weather outage rate inside DC proximity rings elevated vs the rest
-of the territory?
+of the territory? 
 
 ## Classes
 - **WEATHER-LIKELY** (blue) — gusts/wind/precip/temp-extreme/NWS alert/utility weather cause
