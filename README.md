@@ -9,6 +9,7 @@ is the fair-weather outage rate inside DC proximity rings elevated vs the rest
 of the territory? 
 
 ## Are data centers sucking the life outta our grid? 
+<img width="523" height="382" alt="image" src="https://github.com/user-attachments/assets/b8aa2167-6b58-468e-a710-cc9595e4ebb0" />
 
 
 
