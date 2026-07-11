@@ -431,17 +431,33 @@ class IFactor(Kubra):
     If the default paths 404, DevTools on the map (filter 'metadata' or
     'outages') shows the live ones; override with region["data_path"]."""
 
+    BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/126.0.0.0 Safari/537.36")
+
     def _prepare(self):
         base = self.region["base"].rstrip("/")
-        data_path = self.region.get(
-            "data_path", "resources/data/external/interval_generation_data")
-        meta_candidates = [f"{base}/{data_path}/metadata.json",
-                           f"{base}/{data_path}/metadata.xml"]
-        directory = None
+        # CloudFront fronting these maps sometimes 403s non-browser UAs
+        self.s.headers["User-Agent"] = self.BROWSER_UA
+        if self.region.get("data_path"):
+            path_candidates = [self.region["data_path"]]
+        else:
+            path_candidates = [
+                "resources/data/external/interval_generation_data",
+                "resources/data/interval_generation_data",
+                "data/interval_generation_data",
+                "external/interval_generation_data",
+            ]
+        meta_candidates = []
+        for dp in path_candidates:
+            meta_candidates += [f"{base}/{dp}/metadata.json",
+                                f"{base}/{dp}/metadata.xml"]
+        directory, data_path = None, None
         for mu in meta_candidates:
             try:
                 r = self.s.get(mu, timeout=20)
                 if r.status_code != 200:
+                    print(f"    [{self.region['name']}] {r.status_code} {mu}")
                     continue
                 if mu.endswith(".json"):
                     directory = r.json().get("directory")
@@ -449,6 +465,7 @@ class IFactor(Kubra):
                     m = re.search(r"<directory>([^<]+)</directory>", r.text)
                     directory = m.group(1) if m else None
                 if directory:
+                    data_path = mu.rsplit("/metadata", 1)[0][len(base) + 1:]
                     break
             except (requests.RequestException, ValueError):
                 continue
@@ -457,7 +474,7 @@ class IFactor(Kubra):
                 f"[{self.region['name']}] iFactor metadata not found at "
                 f"{meta_candidates}. Open the utility map with DevTools, "
                 f"filter 'metadata', and set region['base']/'data_path' to match.")
-        print(f"[i] [{self.region['name']}] ifactor directory: {directory}")
+        print(f"[i] [{self.region['name']}] ifactor: {data_path} -> {directory}")
         return {"base": base, "data_path": data_path, "dir": directory}
 
     def _tile_url(self, ctx, qk):
@@ -715,6 +732,60 @@ def fetch_auto_datacenters(cfg, out_path):
     return True
 
 
+def fetch_powerlines(cfg, sites, out_path, radius_km=12):
+    """Pull OSM-mapped transmission lines (power=line, i.e. HV transmission
+    by OSM convention; minor_line = distribution) within radius_km of each
+    ACTIVE curated site. OSM power mapping is crowd-sourced from visible
+    infrastructure — public data, not CEII. Fail-soft."""
+    active = [s for s in sites
+              if s.get("lat") and s.get("status") in
+              ("construction", "contested", "announced")]
+    if not active:
+        return False
+    deg = radius_km / 111.0
+    parts = []
+    for s in active:
+        box = (f"{s['lat']-deg},{s['lon']-deg/0.75},"
+               f"{s['lat']+deg},{s['lon']+deg/0.75}")
+        parts.append(f'way["power"="line"]({box});')
+    q = f"[out:json][timeout:90];({''.join(parts)});out geom tags;"
+    try:
+        r = requests.post(OVERPASS_URL, data={"data": q}, timeout=120,
+                          headers={"User-Agent": cfg["nws_user_agent"]})
+        r.raise_for_status()
+        elements = r.json().get("elements", [])
+    except Exception as e:
+        print(f"[!] Overpass powerlines failed (non-fatal): {e}")
+        return False
+    lines, seen = [], set()
+    for el in elements:
+        if el.get("type") != "way" or el.get("id") in seen:
+            continue
+        seen.add(el.get("id"))
+        geom = [[round(p["lat"], 5), round(p["lon"], 5)]
+                for p in el.get("geometry", [])]
+        if len(geom) < 2:
+            continue
+        t = el.get("tags", {}) or {}
+        lines.append({"id": el["id"],
+                      "name": t.get("name", ""),
+                      "voltage": t.get("voltage", ""),
+                      "operator": t.get("operator", ""),
+                      "cables": t.get("cables", ""),
+                      "geom": geom})
+    payload = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "radius_km": radius_km,
+               "note": "OSM power=line ways within radius of active-change "
+                       "sites. Crowd-mapped visible infrastructure. Which "
+                       "specific line FEEDS a site needs the interconnection "
+                       "docket; this shows what's physically nearby.",
+               "lines": lines}
+    with open(out_path, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"[i] powerlines: {len(lines)} OSM transmission segments -> {out_path}")
+    return True
+
+
 def _auto_layer_stale(path):
     if not os.path.exists(path):
         return True
@@ -808,8 +879,11 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
         for o in outages:
             cond = wx.conditions(o["lat"], o["lon"])
             alerts = wx.active_alerts(o["lat"], o["lon"])
-            usable = [s for s in sites if s.get("status") != "control"
-                      and s.get("lat")]
+            # Only active-change sites drive dc_flag / classification /
+            # alerts. Operating + control sites are context layers.
+            ACTIVE_STATUSES = ("construction", "contested", "announced")
+            usable = [s for s in sites
+                      if s.get("status") in ACTIVE_STATUSES and s.get("lat")]
             site, dist = nearest_dc(o["lat"], o["lon"], usable) if usable else (None, None)
             cls, wflag, dflag, why = classify(o, cond, alerts, site,
                                               dist if dist is not None else 1e9, cfg)
@@ -850,6 +924,9 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
         auto_path = os.path.join(emit_dir, "datacenters_auto.json")
         if _auto_layer_stale(auto_path):
             fetch_auto_datacenters(cfg, auto_path)
+        pl_path = os.path.join(emit_dir, "powerlines.json")
+        if _auto_layer_stale(pl_path):
+            fetch_powerlines(cfg, sites, pl_path)
         _maybe_alert(emit_dir, emitted, cfg)
     print("[i] Snapshot classification:")
     for cls, n in sorted(counts.items(), key=lambda x: -x[1]):
