@@ -90,6 +90,7 @@
       <div class="tab active" data-tab="live">Live</div>
       <div class="tab" data-tab="history">History</div>
       <div class="tab" data-tab="evidence">Evidence</div>
+      <div class="tab" data-tab="burden">Burden</div>
     </div>
 
     <div id="tab-live">
@@ -149,6 +150,29 @@
         &bull; Operating DCs are transmission-interconnected; the plausible
         mechanism is construction-phase distribution stress.<br>
         &bull; Reliability ≠ rates. PJM capacity costs are a separate dataset.</div></div>
+    </div>
+
+    <div id="tab-burden" style="display:none">
+      <div class="card"><h2>The interstate cost shift (PJM)</h2>
+        <div class="meta">Ohio shares one capacity market with Northern
+        Virginia's Data Center Alley. Electrons aren't tagged — the burden is
+        visible in prices, socialized transmission, and reserve margins.</div>
+        <div class="kpis" style="margin-top:10px">
+          <div class="kpi"><div class="lbl">capacity price, 2 yrs</div>
+            <div class="big" id="b-mult">—</div></div>
+          <div class="kpi"><div class="lbl">avg OH bill impact /mo</div>
+            <div class="big" id="b-oh">—</div></div>
+          <div class="kpi"><div class="lbl">of 25/26 spike from DCs</div>
+            <div class="big" id="b-dc">—</div></div>
+          <div class="kpi"><div class="lbl">DC transmission on ratepayers</div>
+            <div class="big" id="b-tx">—</div></div></div></div>
+      <div class="card"><h2>Capacity auction trajectory ($/MW-day)</h2>
+        <div id="bchart" style="display:flex;align-items:flex-end;gap:10px;height:120px;margin:6px 0"></div>
+        <div class="caveat" id="bnotes"></div></div>
+      <div class="card"><h2>Mechanisms</h2><div class="caveat" id="bmech"></div></div>
+      <div class="card"><h2>Counterpoint & sources</h2>
+        <div class="caveat" id="bcounter"></div>
+        <div class="caveat" id="bsrc" style="margin-top:6px"></div></div>
     </div>
   </div>
   <div id="map"></div>
@@ -387,7 +411,7 @@ document.querySelectorAll("#evwin .chip").forEach(c=>c.onclick=()=>{
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
   t.classList.add("active"); currentView=t.dataset.tab;
-  for(const id of["live","history","evidence"])
+  for(const id of["live","history","evidence","burden"])
     document.getElementById("tab-"+id).style.display=t.dataset.tab===id?"":"none";
   if(t.dataset.tab==="live"&&LATEST)
     plot(LATEST.outages||[],document.getElementById("live-meta"),liveLabel());
@@ -434,7 +458,33 @@ async function boot(){
   document.getElementById("loadday").onclick=()=>loadHistDay(document.getElementById("daysel").value);
   timeline();
   loadEvidence(30);
+  try{ renderBurden(await fetch("data/pjm_burden.json").then(r=>r.json())); }catch(e){}
   setTimeout(refresh,REFRESH_MS);
+}
+function renderBurden(B){
+  const a=B.auctions||[]; if(!a.length) return;
+  const first=a[0].rto, last=a[a.length-1].rto;
+  document.getElementById("b-mult").textContent="~"+Math.round(last/first)+"×";
+  document.getElementById("b-oh").textContent="$"+B.kpis.oh_monthly_bill_impact_usd;
+  document.getElementById("b-dc").textContent=Math.round(100*B.kpis.dc_share_of_2526_increase)+"%";
+  document.getElementById("b-tx").textContent="$"+B.kpis.dc_transmission_subsidy_usd_b+"B";
+  const mx=Math.max(...a.map(x=>x.dom||x.rto));
+  const ch=document.getElementById("bchart"); ch.innerHTML="";
+  for(const x of a){
+    const col=document.createElement("div");
+    col.style.cssText="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px";
+    const h=Math.max(4,Math.round(96*x.rto/mx));
+    const domh=x.dom?Math.max(4,Math.round(96*x.dom/mx)):0;
+    col.innerHTML=`<div style="display:flex;gap:3px;align-items:flex-end;height:96px">
+      <div title="RTO ${x.rto}" style="width:22px;height:${h}px;background:var(--blue);border-radius:3px 3px 0 0"></div>
+      ${x.dom?`<div title="Dominion ${x.dom}" style="width:22px;height:${domh}px;background:var(--red);border-radius:3px 3px 0 0"></div>`:""}
+    </div><div class="meta" style="font-size:10.5px">${x.dy}${x.capped?" (cap)":""}</div>`;
+    ch.appendChild(col);}
+  document.getElementById("bnotes").innerHTML=
+    "blue = RTO-wide, red = Dominion (NoVA) zone.<br>"+a.map(x=>`<b>${x.dy}</b>: ${esc(x.note)}`).join("<br>");
+  document.getElementById("bmech").innerHTML=(B.mechanisms||[]).map(m=>"&bull; "+esc(m)).join("<br>");
+  document.getElementById("bcounter").textContent=B.counterpoint||"";
+  document.getElementById("bsrc").innerHTML="<b>Sources:</b> "+(B.sources||[]).map(esc).join(" · ");
 }
 boot().catch(e=>{document.getElementById("live-meta").textContent="failed to load: "+e;});
 </script>
