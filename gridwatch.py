@@ -90,10 +90,9 @@ DEFAULT_CONFIG = {
          "base": "https://outagemap.aes-ohio.com",
          "entry": "https://outagemap.aes-ohio.com/",
          "bbox": {"west": -84.9, "south": 39.3, "east": -83.5, "north": 40.4}},
-        {"name": "OH-DUKE",
+        {"name": "OH-DUKE", "provider": "duke", "jurisdiction": "DEM",
          "entry": "https://outagemap.duke-energy.com/",
-         "instance_id": "", "view_id": "",
-         "bbox": {"west": -84.9, "south": 38.8, "east": -83.6, "north": 39.6}},
+         "bbox": {"west": -84.9, "south": 38.4, "east": -83.6, "north": 39.6}},
     ],
     # Alerting: file a GitHub issue when a DC-proximate fair-weather outage
     # of at least this many customers appears (CI only; needs issues:write)
@@ -482,9 +481,82 @@ class IFactor(Kubra):
                 f"outages/{qk}.json")
 
 
+class DukeAPI(Kubra):
+    """Duke Energy outage-maps API (jurisdiction DEM = Ohio/Kentucky).
+    Not tile-based: their map config publicly serves consumer keys; a Basic
+    token built from them authorizes the point-outage endpoint. Credit:
+    GateHouseMedia/power-outages + Thomas Wilburn for the auth discovery."""
+
+    CONFIG_URL = "https://outagemap.duke-energy.com/config/config.prod.json"
+    OUTAGES_URL = "https://cust-api.duke-energy.com/outage-maps/v1/outages"
+
+    def fetch_outages(self):
+        import base64
+        self.s.headers.update({
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://outagemap.duke-energy.com",
+            "Referer": "https://outagemap.duke-energy.com/",
+            "User-Agent": IFactor.BROWSER_UA,
+        })
+        r = self.s.get(self.CONFIG_URL, timeout=30)
+        r.raise_for_status()
+        cj = r.json()
+        token = base64.b64encode(
+            f"{cj['consumer_key_emp']}:{cj['consumer_secret_emp']}".encode()
+        ).decode()
+        self.s.headers["Authorization"] = f"Basic {token}"
+        juris = self.region.get("jurisdiction", "DEM")
+        rr = self.s.get(f"{self.OUTAGES_URL}?jurisdiction={juris}",
+                        cookies=r.cookies, timeout=30)
+        rr.raise_for_status()
+        data = rr.json().get("data", [])
+        print(f"[i] [{self.region['name']}] duke api: {len(data)} raw events "
+              f"(jurisdiction {juris})")
+
+        def pick(d, *names, default=None):
+            for n in names:
+                if n in d and d[n] is not None:
+                    return d[n]
+            return default
+
+        bbox = self.region.get("bbox") or {}
+        out = []
+        for i, ev in enumerate(data):
+            lat = pick(ev, "deviceLatitudeLocation", "latitude", "lat")
+            lon = pick(ev, "deviceLongitudeLocation", "longitude", "lon", "lng")
+            if lat is None or lon is None:
+                if i == 0:
+                    print(f"[!] duke schema sample (no coords found): "
+                          f"{json.dumps(ev)[:400]}")
+                continue
+            lat, lon = float(lat), float(lon)
+            if bbox and not (bbox["south"] <= lat <= bbox["north"]
+                             and bbox["west"] <= lon <= bbox["east"]):
+                continue
+            cust = pick(ev, "customersAffectedNumber", "customersAffected",
+                        "custAffected", default=0)
+            cause = pick(ev, "outageCause", "convertedOutageCauseCode",
+                         "cause", default="")
+            etr = pick(ev, "estimatedRestorationTime", "etr",
+                       "etrOverride", default="")
+            oid = pick(ev, "sourceEventNumber", "eventNumber", "outageId",
+                       default=f"{i}")
+            out.append({"outage_id": str(oid), "lat": round(lat, 5),
+                        "lon": round(lon, 5),
+                        "customers": int(cust) if cust else 0,
+                        "cause": str(cause), "crew_status": str(
+                            pick(ev, "crewStatus", "deviceStatus", default="")),
+                        "etr": str(etr), "cluster": False,
+                        "region": self.region["name"]})
+        return out
+
+
 def make_provider(cfg, region):
-    if region.get("provider", "kubra") == "ifactor":
+    p = region.get("provider", "kubra")
+    if p == "ifactor":
         return IFactor(cfg, region=region)
+    if p == "duke":
+        return DukeAPI(cfg, region=region)
     return Kubra(cfg, region=region)
 
 
@@ -841,8 +913,11 @@ def _old_discover(cfg):
 
 
 def _region_ready(r):
-    if r.get("provider") == "ifactor":
+    p = r.get("provider", "kubra")
+    if p == "ifactor":
         return bool(r.get("base"))
+    if p == "duke":
+        return True
     return bool(r.get("instance_id") and r.get("view_id"))
 
 
