@@ -156,6 +156,56 @@
       "territory": "Duquesne Light (NOT FirstEnergy - context site)",
       "verify": true,
       "source": "Western-PA gas-powered DC project roundup (TribLive, Mar 2026). Duquesne territory means its outages won't appear on FE's PA map; site kept for corridor context."
+    },
+    {
+      "name": "Meta New Albany campus",
+      "operator": "Meta",
+      "lat": 40.056,
+      "lon": -82.77,
+      "status": "construction",
+      "territory": "AEP Ohio (Columbus alley)",
+      "verify": true,
+      "source": "Operating since 2022 with continuous multi-building expansion phases underway; parcel via Licking/Franklin Co GIS"
+    },
+    {
+      "name": "AWS New Albany / Jug Street corridor",
+      "operator": "Amazon Web Services",
+      "lat": 40.105,
+      "lon": -82.78,
+      "status": "construction",
+      "territory": "AEP Ohio (Columbus alley)",
+      "verify": true,
+      "source": "Part of AWS's multibillion-dollar central-Ohio expansion; multiple parcels \u2014 treat as corridor anchor, refine per-building from county GIS"
+    },
+    {
+      "name": "Google New Albany",
+      "operator": "Google",
+      "lat": 40.115,
+      "lon": -82.83,
+      "status": "construction",
+      "territory": "AEP Ohio (Columbus alley)",
+      "verify": true,
+      "source": "Announced 2023-2024 New Albany build alongside existing Columbus/Lancaster sites; verify parcel"
+    },
+    {
+      "name": "Microsoft Licking Co. sites (New Albany/Heath/Hebron)",
+      "operator": "Microsoft",
+      "lat": 40.033,
+      "lon": -82.63,
+      "status": "contested",
+      "territory": "AEP Ohio (Columbus alley)",
+      "verify": true,
+      "source": "Three-site $4.2B plan announced 2023; construction PAUSED on Licking Co. sites announced 2025 \u2014 status contested/paused is analytically interesting: watch for outage-rate change at pause"
+    },
+    {
+      "name": "QTS New Albany campus",
+      "operator": "QTS (Blackstone)",
+      "lat": 40.095,
+      "lon": -82.75,
+      "status": "construction",
+      "territory": "AEP Ohio (Columbus alley)",
+      "verify": true,
+      "source": "Large multi-building campus in the International Business Park; verify parcel via New Albany planning docs"
     }
   ]
 }
