@@ -328,26 +328,35 @@ class Kubra:
     def _descend(self, ctx):
         """One full quadkey descent.
 
-        Rule: every tile that returns data is drilled into (not just tiles
-        with cluster markers) — KUBRA aggregates at coarse zooms, so a record
-        that looks like a lone incident at zoom 8 may be several outages that
-        only separate deeper. To avoid double counting, records are held per
-        tile and a tile's records are DISCARDED if any of its four children
-        answered (the children re-emit the same outages at higher fidelity).
-        Only leaf tiles — those whose children all 404 — contribute records.
+        Records are collected per tile, then resolved bottom-up:
+
+            resolve(T) = union(resolve(children)) IF the children's records
+                         account for at least (1 - tol) of T's customers,
+                         otherwise T's own records.
+
+        This is loss-safe in both directions. A parent is only discarded when
+        its children demonstrably re-emit the same outages at higher
+        resolution (customer totals reconcile); if a child tile answers empty
+        or only partially covers the parent, the parent's records are kept.
+        Nothing is ever counted twice — every subtree yields either the parent
+        or the children, never both.
 
         Returns (incidents dict, any_tile_ever).
         """
         cfg = self.cfg
         bbox = self.region.get("bbox") or cfg["bbox"]
-        tile_records = {}      # qk -> [rec, ...]
-        answered_qks = set()   # every tile that returned a payload
+        tile_records = {}       # qk -> [rec, ...]  (only tiles WITH records)
         any_ever = False
+        tol = cfg.get("supersede_tolerance", 0.98)
 
         def key(rec):
             return f"{rec['outage_id']}@{rec['lat']:.4f},{rec['lon']:.4f}"
 
+        def cust(recs):
+            return sum(r.get("customers") or 0 for r in recs)
+
         zoom = cfg["zoom_min"]
+        top_zoom = None
         frontier = quadkeys_for_bbox(bbox, zoom)
         tiles_requested = 0
         budget = (self.region.get("max_tiles")
@@ -361,13 +370,12 @@ class Kubra:
             if tiles_requested + len(frontier) > budget:
                 allowed = budget - tiles_requested
                 print(f"[!] [{self.region['name']}] budget caps zoom {zoom} at "
-                      f"{allowed}/{len(frontier)} tiles — COVERAGE INCOMPLETE. "
-                      f"Raise 'max_tiles' for this region.")
+                      f"{allowed}/{len(frontier)} — COVERAGE INCOMPLETE.")
                 frontier = frontier[:allowed]
 
             from concurrent.futures import ThreadPoolExecutor
-            workers = cfg.get("tile_workers", 8)
-            with ThreadPoolExecutor(max_workers=workers) as tp:
+            with ThreadPoolExecutor(
+                    max_workers=cfg.get("tile_workers", 8)) as tp:
                 payloads = list(tp.map(lambda q: self._fetch_tile(ctx, q),
                                        frontier))
             tiles_requested += len(frontier)
@@ -377,43 +385,57 @@ class Kubra:
                 if payload is None:
                     continue
                 any_ever = True
-                answered_qks.add(qk)
                 n_tiles += 1
-                recs = []
-                for item in payload.get("file_data", []):
-                    rec = self._parse_item(item)
-                    if rec:
-                        recs.append(rec)
-                        n_rec += 1
+                recs = [r for r in
+                        (self._parse_item(i)
+                         for i in payload.get("file_data", []))
+                        if r]
                 if recs:
                     tile_records[qk] = recs
-                    # drill into ANY tile with data — aggregates hide here
+                    n_rec += len(recs)
+                    if top_zoom is None:
+                        top_zoom = zoom
                     next_frontier.extend(qk + d for d in "0123")
 
-            have_any = bool(tile_records)
             print(f"[i] [{self.region['name']}] zoom {zoom}: "
-                  f"{len(frontier)} req, {n_tiles} answered, {n_rec} records "
-                  f"(tiles held: {len(tile_records)})")
+                  f"{len(frontier)} req, {n_tiles} ok, {n_rec} records")
 
-            if not n_tiles and not have_any:
+            if not tile_records:          # nothing found anywhere yet
                 if zoom < cfg.get("widen_max_zoom", 10):
                     next_frontier = quadkeys_for_bbox(bbox, zoom + 1)
                 else:
                     break
             frontier, zoom = next_frontier, zoom + 1
 
-        # Keep only leaf tiles: a tile whose children answered has been
-        # superseded by them.
-        incidents, dropped = {}, 0
-        for qk, recs in tile_records.items():
-            if any((qk + d) in answered_qks for d in "0123"):
-                dropped += len(recs)
-                continue
-            for rec in recs:
+        if not tile_records:
+            return {}, any_ever
+
+        def resolve(qk):
+            mine = tile_records.get(qk, [])
+            kids = [qk + d for d in "0123" if (qk + d) in tile_records]
+            if kids:
+                kid_recs = []
+                for k in kids:
+                    kid_recs.extend(resolve(k))
+                if not mine or cust(kid_recs) >= cust(mine) * tol:
+                    return kid_recs          # children fully account for me
+                # children under-account (partial pyramid) — trust myself
+            return mine
+
+        incidents = {}
+        roots = [qk for qk in tile_records if len(qk) == top_zoom]
+        coarse_cust = sum(cust(tile_records[qk]) for qk in roots)
+        for qk in roots:
+            for rec in resolve(qk):
                 incidents[key(rec)] = rec
-        print(f"[i] [{self.region['name']}] {len(incidents)} outages "
-              f"({dropped} superseded aggregate records dropped, "
-              f"{tiles_requested} tiles)")
+        final_cust = sum(r.get("customers") or 0 for r in incidents.values())
+        flag = ""
+        if coarse_cust and final_cust < coarse_cust * 0.95:
+            flag = (f"  [!] customers dropped vs top zoom "
+                    f"({coarse_cust}) — possible pyramid gap")
+        print(f"[i] [{self.region['name']}] {len(incidents)} outages, "
+              f"{final_cust} customers (top-zoom total {coarse_cust}, "
+              f"{tiles_requested} tiles){flag}")
         return incidents, any_ever
 
     @staticmethod
