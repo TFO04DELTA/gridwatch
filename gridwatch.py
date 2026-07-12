@@ -319,10 +319,13 @@ class Kubra:
                       f"reached at zoom {zoom} — stopping with what we have.")
                 break
             next_frontier, n_inc, n_clu, any_tile = [], 0, 0, False
-            for qk in frontier:
-                tiles_requested += 1
-                payload = self._fetch_tile(ctx, qk)
-                time.sleep(0.04)
+            from concurrent.futures import ThreadPoolExecutor
+            workers = self.cfg.get("tile_workers", 8)
+            with ThreadPoolExecutor(max_workers=workers) as tp:
+                payloads = list(tp.map(lambda q: self._fetch_tile(ctx, q),
+                                       frontier))
+            tiles_requested += len(frontier)
+            for qk, payload in zip(frontier, payloads):
                 if payload is None:
                     continue
                 any_tile = True
@@ -658,7 +661,7 @@ class Weather:
         except requests.RequestException as e:
             print(f"[!] Open-Meteo failed for cell {cell}: {e}")
         self._cell_cache[cell] = out
-        time.sleep(0.1)
+        time.sleep(0.02)
         return out
 
     def active_alerts(self, lat, lon):
@@ -681,8 +684,20 @@ class Weather:
             print(f"[!] NWS alerts failed for cell {cell}: {e}")
         events = sorted(set(events))
         self._alert_cache[cell] = events
-        time.sleep(0.1)
+        time.sleep(0.02)
         return events
+
+    def prefetch(self, points, workers=6):
+        """Warm the per-cell caches for a batch of (lat, lon) points in
+        parallel. Enrichment afterwards is pure cache hits."""
+        from concurrent.futures import ThreadPoolExecutor
+        cells = sorted({self._cell(la, lo) for la, lo in points})
+        if not cells:
+            return
+        print(f"[i] prefetching weather for {len(cells)} grid cells")
+        with ThreadPoolExecutor(max_workers=workers) as tp:
+            list(tp.map(lambda c: (self.conditions(*c),
+                                   self.active_alerts(*c)), cells))
 
 
 # ----------------------------------------------------------------------------
@@ -979,7 +994,14 @@ def _region_ready(r):
 
 
 def _regions(cfg):
-    regs = [r for r in cfg.get("regions", []) if _region_ready(r)]
+    only = os.environ.get("GRIDWATCH_REGIONS", "").strip()
+    wanted = {x.strip() for x in only.split(",") if x.strip()} if only else None
+    regs = [r for r in cfg.get("regions", [])
+            if _region_ready(r)
+            and r.get("enabled", True)
+            and (wanted is None or r["name"] in wanted)]
+    if wanted:
+        print(f"[i] region filter active: {sorted(wanted)}")
     if not regs and cfg.get("kubra_instance_id"):
         regs = [{"name": "OH", "entry": cfg.get("utility_entry_url", ""),
                  "instance_id": cfg["kubra_instance_id"],
@@ -1015,6 +1037,8 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
           f"{', '.join(r['name'] for r in regions)}")
     with ThreadPoolExecutor(max_workers=min(7, len(regions))) as pool:
         region_results = list(pool.map(lambda r: _fetch_region(cfg, r), regions))
+    all_pts = [(o["lat"], o["lon"]) for outs in region_results for o in outs]
+    wx.prefetch(all_pts)
     for region, outages in zip(regions, region_results):
         for o in outages:
             cond = wx.conditions(o["lat"], o["lon"])
@@ -1163,14 +1187,84 @@ def _emit_json(emit_dir, polled_at, records, cfg):
                      "customers": cust})
     with open(os.path.join(hist_dir, "index.json"), "w") as f:
         json.dump({"days": days}, f, separators=(",", ":"))
-    # copy the DC + infrastructure layers alongside so the page has one data root
-    for src_name in ("datacenters.json", "infrastructure.json", "pjm_burden.json"):
-        p = os.path.join(BASE_DIR, src_name)
-        if os.path.exists(p):
-            with open(p) as fin, open(os.path.join(emit_dir, src_name), "w") as fout:
-                fout.write(fin.read())
-    print(f"[i] emitted {len(records)} records -> {emit_dir}/latest.json "
-          f"+ history/{day}.ndjson")
+    _emit_durations(emit_dir, hist_dir, days)
+
+
+def _emit_durations(emit_dir, hist_dir, days, window=7, poll_minutes=15):
+    """Restoration analytics from the last `window` days of observations:
+    per-region average/median observed close-out time and momentary-event
+    share (incidents seen in exactly one poll ~ resolved < poll interval).
+    Observed span understates true duration by up to one interval on each
+    end; we add half an interval as the standard correction and say so."""
+    from statistics import median
+    spans = {}  # key -> {first, last, region, customers, polls}
+    for d in days[-window:]:
+        p = os.path.join(hist_dir, f"{d['date']}.ndjson")
+        try:
+            with open(p) as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except ValueError:
+                        continue
+                    k = f"{r.get('region')}|{r.get('outage_id')}"
+                    t = r.get("polled_at", "")
+                    s = spans.setdefault(k, {"first": t, "last": t,
+                                             "region": r.get("region"),
+                                             "customers": r.get("customers") or 0,
+                                             "polls": 0})
+                    s["polls"] += 1
+                    if t < s["first"]:
+                        s["first"] = t
+                    if t > s["last"]:
+                        s["last"] = t
+                    s["customers"] = max(s["customers"], r.get("customers") or 0)
+        except OSError:
+            continue
+    # exclude outages still active in the newest poll (not yet closed)
+    newest = max((s["last"] for s in spans.values()), default="")
+    by_region = {}
+    for s in spans.values():
+        if s["last"] == newest:
+            continue  # still open — no close-out yet
+        try:
+            t0 = datetime.fromisoformat(s["first"])
+            t1 = datetime.fromisoformat(s["last"])
+        except ValueError:
+            continue
+        dur_min = (t1 - t0).total_seconds() / 60 + poll_minutes  # ± half-interval each end
+        b = by_region.setdefault(s["region"], {"durs": [], "momentary": 0,
+                                               "resolved": 0})
+        b["resolved"] += 1
+        b["durs"].append(dur_min)
+        if s["polls"] == 1:
+            b["momentary"] += 1
+    out = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "window_days": window, "poll_minutes": poll_minutes,
+           "note": ("Observed close-out = last-seen minus first-seen plus one "
+                    "poll interval; true duration is within ±"
+                    f"{poll_minutes} min. 'Momentary' = seen in a single poll "
+                    "(resolved in under ~one interval) — the public-data "
+                    "cousin of a MAIFI momentary-interruption metric. True "
+                    "brownout/voltage-sag data is utility-internal and only "
+                    "surfaces in PUCO reliability filings."),
+           "regions": {}}
+    for reg, b in sorted(by_region.items()):
+        if not b["durs"]:
+            continue
+        out["regions"][reg] = {
+            "resolved": b["resolved"],
+            "avg_min": round(sum(b["durs"]) / len(b["durs"]), 1),
+            "median_min": round(median(b["durs"]), 1),
+            "momentary": b["momentary"],
+            "momentary_pct": round(100 * b["momentary"] / b["resolved"], 1),
+        }
+    with open(os.path.join(emit_dir, "durations.json"), "w") as f:
+        json.dump(out, f, separators=(",", ":"))
+    print(f"[i] durations: {sum(b['resolved'] for b in by_region.values())} "
+          f"resolved incidents analyzed across {len(by_region)} regions")
 
 
 CLASS_COLORS = {
