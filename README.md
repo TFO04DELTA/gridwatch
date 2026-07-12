@@ -20,3 +20,5 @@ of the territory?
 - **UNEXPLAINED FAIR-WEATHER** (amber) — neither (equipment failure baseline)
 
 # https://tfo04delta.github.io/gridwatch/
+
+**Adding more states soon**
