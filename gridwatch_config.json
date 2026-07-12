@@ -1,8 +1,11 @@
 {
+  "_help": "kubra_layer per region is optional: leave it off and the scraper auto-detects on first poll and prints the value to pin here (speeds future polls). GRIDWATCH_REGIONS env var or per-region enabled:false lets you scope a run.",
+  "tile_workers": 8,
   "regions": [
     {"name": "OH", "entry": "https://outages-oh.firstenergycorp.com/",
      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
      "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
+     "kubra_layer": "cluster-5",
      "bbox": {"west": -84.9, "south": 40.2, "east": -80.4, "north": 42.1}},
     {"name": "OH-AEP", "provider": "ifactor",
      "base": "https://d6ss517do1xkp.cloudfront.net",
@@ -18,6 +21,7 @@
     {"name": "PA-NY", "entry": "https://outages-pa.firstenergycorp.com/",
      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
      "view_id": "8587e451-e258-4692-b5e8-28010506d51a",
+     "kubra_layer": "cluster-5",
      "bbox": {"west": -80.6, "south": 39.6, "east": -74.4, "north": 42.9}},
     {"name": "NJ", "entry": "https://outages-nj.firstenergycorp.com/",
      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
