@@ -975,7 +975,18 @@ def _regions(cfg):
     return regs
 
 
+def _fetch_region(cfg, region):
+    try:
+        outages = make_provider(cfg, region).fetch_outages()
+        print(f"[i] {region['name']}: {len(outages)} unique outages")
+        return outages
+    except Exception as e:
+        print(f"[!] region {region['name']} failed: {e}")
+        return []
+
+
 def cmd_poll(cfg, emit_dir=None, no_db=False):
+    from concurrent.futures import ThreadPoolExecutor
     regions = _regions(cfg)
     if not regions:
         sys.exit("[!] No regions configured with KUBRA GUIDs.")
@@ -984,14 +995,11 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
     wx = Weather(cfg)
     conn = None if no_db else db()
     counts, emitted = {}, []
-    for region in regions:
-        print(f"=== region {region['name']} ===")
-        try:
-            outages = make_provider(cfg, region).fetch_outages()
-        except Exception as e:
-            print(f"[!] region {region['name']} failed: {e}")
-            continue
-        print(f"[i] {region['name']}: {len(outages)} unique outages")
+    print(f"[i] fetching {len(regions)} regions in parallel: "
+          f"{', '.join(r['name'] for r in regions)}")
+    with ThreadPoolExecutor(max_workers=min(7, len(regions))) as pool:
+        region_results = list(pool.map(lambda r: _fetch_region(cfg, r), regions))
+    for region, outages in zip(regions, region_results):
         for o in outages:
             cond = wx.conditions(o["lat"], o["lon"])
             alerts = wx.active_alerts(o["lat"], o["lon"])
