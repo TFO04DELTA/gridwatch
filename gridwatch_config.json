@@ -1,40 +1,109 @@
 {
+  "_help": "FirstEnergy serves ONE KUBRA dataset across all its state views \u2014 sweep it once (region FE) and label outages by state via sub_regions. Separate per-state regions caused duplicate sweeps and double-counted border outages. AEP/AES/Duke are independent utilities with their own feeds.",
   "regions": [
-    {"name": "OH", "entry": "https://outages-oh.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
-     "kubra_layer": "cluster-5",
-     "bbox": {"west": -84.9, "south": 40.2, "east": -80.4, "north": 42.1}},
-    {"name": "PA-NY", "entry": "https://outages-pa.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "8587e451-e258-4692-b5e8-28010506d51a",
-     "kubra_layer": "cluster-5",
-     "bbox": {"west": -80.6, "south": 39.6, "east": -74.4, "north": 42.9}},
-    {"name": "NJ", "entry": "https://outages-nj.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "fcd7c23d-de37-4471-8ca3-37c3260f94fa",
-     "bbox": {"west": -75.7, "south": 38.8, "east": -73.8, "north": 41.4}},
-    {"name": "MD-WV", "entry": "https://outages-mdwv.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "5ed3ddf1-3a6f-4cfd-8957-eba54b5baaad",
-     "bbox": {"west": -82.7, "south": 37.1, "east": -77.0, "north": 40.7}},
-    {"name": "OH-AEP", "provider": "ifactor",
-     "base": "https://d6ss517do1xkp.cloudfront.net",
-     "entry": "https://outagemap.aepohio.com/",
-     "bbox": {"west": -84.9, "south": 38.3, "east": -80.6, "north": 41.4}},
-    {"name": "OH-AES", "provider": "aesxml",
-     "url": "https://myprofile.aes-ohio.com/DATA/DPLOMSDATA.xml",
-     "entry": "https://myprofile.aes-ohio.com/Outages/Outages.html",
-     "bbox": {"west": -85.0, "south": 38.9, "east": -82.7, "north": 40.8}},
-    {"name": "OH-DUKE", "provider": "duke", "jurisdiction": "DEM",
-     "entry": "https://outagemap.duke-energy.com/",
-     "bbox": {"west": -85.0, "south": 38.3, "east": -83.4, "north": 39.8}}
+    {
+      "name": "FE",
+      "entry": "https://outages-oh.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
+      "kubra_layer": "cluster-5",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -84.9,
+        "south": 37.1,
+        "east": -73.8,
+        "north": 42.9
+      },
+      "sub_regions": [
+        {
+          "name": "MD",
+          "bbox": {
+            "west": -79.6,
+            "south": 39.2,
+            "east": -77.0,
+            "north": 39.72
+          }
+        },
+        {
+          "name": "NJ",
+          "bbox": {
+            "west": -75.6,
+            "south": 38.8,
+            "east": -73.8,
+            "north": 41.4
+          }
+        },
+        {
+          "name": "PA-NY",
+          "bbox": {
+            "west": -80.6,
+            "south": 39.72,
+            "east": -74.4,
+            "north": 42.9
+          }
+        },
+        {
+          "name": "WV",
+          "bbox": {
+            "west": -82.7,
+            "south": 37.1,
+            "east": -77.7,
+            "north": 40.7
+          }
+        },
+        {
+          "name": "OH",
+          "bbox": {
+            "west": -84.9,
+            "south": 38.4,
+            "east": -80.5,
+            "north": 42.1
+          }
+        }
+      ]
+    },
+    {
+      "name": "OH-AEP",
+      "provider": "ifactor",
+      "base": "https://d6ss517do1xkp.cloudfront.net",
+      "entry": "https://outagemap.aepohio.com/",
+      "bbox": {
+        "west": -84.9,
+        "south": 38.3,
+        "east": -80.6,
+        "north": 41.4
+      }
+    },
+    {
+      "name": "OH-AES",
+      "provider": "aesxml",
+      "url": "https://myprofile.aes-ohio.com/DATA/DPLOMSDATA.xml",
+      "entry": "https://myprofile.aes-ohio.com/Outages/Outages.html",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.9,
+        "east": -82.7,
+        "north": 40.8
+      }
+    },
+    {
+      "name": "OH-DUKE",
+      "provider": "duke",
+      "jurisdiction": "DEM",
+      "entry": "https://outagemap.duke-energy.com/",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.3,
+        "east": -83.4,
+        "north": 39.8
+      }
+    }
   ],
   "tile_workers": 8,
   "alert_min_customers": 50,
   "kubra_layer": "cluster-5",
   "widen_max_zoom": 10,
-  "max_tiles_per_region": 4000,
+  "max_tiles_per_region": 20000,
   "zoom_min": 8,
   "zoom_max": 14,
   "wind_gust_kmh_threshold": 45.0,
