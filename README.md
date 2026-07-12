@@ -19,6 +19,6 @@ of the territory?
 - **AMBIGUOUS** (purple) — both
 - **UNEXPLAINED FAIR-WEATHER** (amber) — neither (equipment failure baseline)
 
-#Check it out here: https://paradoxsnowman.github.io/gridwatch/
+# Check it out here: https://paradoxsnowman.github.io/gridwatch/
 
 **Adding more states soon**
