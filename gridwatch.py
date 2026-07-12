@@ -108,7 +108,7 @@ DEFAULT_CONFIG = {
     # tiles by then = zero outages in the region.
     "widen_max_zoom": 10,
     # Hard circuit breaker per region (healthy storm-day use: a few hundred)
-    "max_tiles_per_region": 4000,
+    "max_tiles_per_region": 20000,
     # Quadkey zoom sweep. KUBRA serves cluster tiles at multiple zooms;
     # deeper zoom = more tile fetches but individual (non-clustered) outages.
     "zoom_min": 8,
@@ -326,14 +326,22 @@ class Kubra:
         return list(incidents.values())
 
     def _descend(self, ctx):
-        """One full quadkey descent. Returns (incidents dict, any_tile_ever).
-        any_tile_ever=False means every request 404'd: either the region is
-        quiet or this layer name is wrong for the view."""
+        """One full quadkey descent.
+
+        Rule: every tile that returns data is drilled into (not just tiles
+        with cluster markers) — KUBRA aggregates at coarse zooms, so a record
+        that looks like a lone incident at zoom 8 may be several outages that
+        only separate deeper. To avoid double counting, records are held per
+        tile and a tile's records are DISCARDED if any of its four children
+        answered (the children re-emit the same outages at higher fidelity).
+        Only leaf tiles — those whose children all 404 — contribute records.
+
+        Returns (incidents dict, any_tile_ever).
+        """
         cfg = self.cfg
         bbox = self.region.get("bbox") or cfg["bbox"]
-        incidents = {}
-        pending_clusters = {}
-        answered_qks = set()
+        tile_records = {}      # qk -> [rec, ...]
+        answered_qks = set()   # every tile that returned a payload
         any_ever = False
 
         def key(rec):
@@ -341,62 +349,71 @@ class Kubra:
 
         zoom = cfg["zoom_min"]
         frontier = quadkeys_for_bbox(bbox, zoom)
-        tiles_requested, budget = 0, cfg.get("max_tiles_per_region", 4000)
-        while zoom <= cfg["zoom_max"]:
-            if tiles_requested + len(frontier) > budget:
+        tiles_requested = 0
+        budget = (self.region.get("max_tiles")
+                  or cfg.get("max_tiles_per_region", 20000))
+        while zoom <= cfg["zoom_max"] and frontier:
+            if tiles_requested >= budget:
                 print(f"[!] [{self.region['name']}] tile budget ({budget}) "
-                      f"reached at zoom {zoom} — stopping with what we have.")
+                      f"exhausted at zoom {zoom} — COVERAGE INCOMPLETE. "
+                      f"Raise 'max_tiles' for this region.")
                 break
-            next_frontier, n_inc, n_clu, any_tile = [], 0, 0, False
+            if tiles_requested + len(frontier) > budget:
+                allowed = budget - tiles_requested
+                print(f"[!] [{self.region['name']}] budget caps zoom {zoom} at "
+                      f"{allowed}/{len(frontier)} tiles — COVERAGE INCOMPLETE. "
+                      f"Raise 'max_tiles' for this region.")
+                frontier = frontier[:allowed]
+
             from concurrent.futures import ThreadPoolExecutor
-            workers = self.cfg.get("tile_workers", 8)
+            workers = cfg.get("tile_workers", 8)
             with ThreadPoolExecutor(max_workers=workers) as tp:
                 payloads = list(tp.map(lambda q: self._fetch_tile(ctx, q),
                                        frontier))
             tiles_requested += len(frontier)
+
+            next_frontier, n_rec, n_tiles = [], 0, 0
             for qk, payload in zip(frontier, payloads):
                 if payload is None:
                     continue
-                any_tile = any_ever = True
+                any_ever = True
                 answered_qks.add(qk)
-                tile_clusters = []
+                n_tiles += 1
+                recs = []
                 for item in payload.get("file_data", []):
                     rec = self._parse_item(item)
-                    if not rec:
-                        continue
-                    if rec["cluster"] and zoom < cfg["zoom_max"]:
-                        tile_clusters.append(rec)
-                        n_clu += 1
-                    else:
-                        incidents[key(rec)] = rec
-                        n_inc += 1
-                if tile_clusters:
-                    pending_clusters[qk] = tile_clusters
+                    if rec:
+                        recs.append(rec)
+                        n_rec += 1
+                if recs:
+                    tile_records[qk] = recs
+                    # drill into ANY tile with data — aggregates hide here
                     next_frontier.extend(qk + d for d in "0123")
+
+            have_any = bool(tile_records)
             print(f"[i] [{self.region['name']}] zoom {zoom}: "
-                  f"{len(frontier)} tiles, {n_inc} incidents, "
-                  f"{n_clu} clusters pending "
-                  f"({len(incidents)} unique so far)")
-            if not any_tile and not incidents and not pending_clusters:
+                  f"{len(frontier)} req, {n_tiles} answered, {n_rec} records "
+                  f"(tiles held: {len(tile_records)})")
+
+            if not n_tiles and not have_any:
                 if zoom < cfg.get("widen_max_zoom", 10):
                     next_frontier = quadkeys_for_bbox(bbox, zoom + 1)
                 else:
                     break
             frontier, zoom = next_frontier, zoom + 1
-            if not frontier:
-                break
 
-        # keep clusters whose children never answered (pyramid leaves)
-        kept = 0
-        for qk, recs in pending_clusters.items():
+        # Keep only leaf tiles: a tile whose children answered has been
+        # superseded by them.
+        incidents, dropped = {}, 0
+        for qk, recs in tile_records.items():
             if any((qk + d) in answered_qks for d in "0123"):
+                dropped += len(recs)
                 continue
             for rec in recs:
                 incidents[key(rec)] = rec
-                kept += 1
-        if kept:
-            print(f"[i] [{self.region['name']}] kept {kept} unresolved "
-                  f"cluster markers")
+        print(f"[i] [{self.region['name']}] {len(incidents)} outages "
+              f"({dropped} superseded aggregate records dropped, "
+              f"{tiles_requested} tiles)")
         return incidents, any_ever
 
     @staticmethod
