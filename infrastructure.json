@@ -1,50 +1,117 @@
 {
-  "_notes": [
-    "FirstEnergy/ATSI transmission & substation projects. This is the 'grid work near sites' layer \u2014 construction-phase switching/cutovers on these projects are a plausible direct cause of local outages.",
-    "verify:true = town-level approximate coords. FE's Ohio transmission projects page + OPSB dockets (case numbers) give exact routes/parcels.",
-    "type: substation | line ; status: construction | planned | complete",
-    "Source of truth for additions: firstenergycorp.com/about/transmission_projects/ohio.html (also /pennsylvania.html etc.) and OPSB case search."
-  ],
-  "projects": [
+  "_help": "FirstEnergy serves ONE KUBRA dataset across all its state views \u2014 sweep it once (region FE) and label outages by state via sub_regions. Separate per-state regions caused duplicate sweeps and double-counted border outages. AEP/AES/Duke are independent utilities with their own feeds.",
+  "regions": [
     {
-      "name": "Fulton Co. 345kV substation + 9-mi line (Delta Village area)",
-      "type": "substation",
-      "status": "construction",
-      "lat": 41.575,
-      "lon": -84.0,
-      "territory": "Toledo Edison",
-      "verify": true,
-      "source": "FE newsroom Oct 2025: new 345kV substation (in service Dec 2026) + 9-mile line, Delta/Fulton/Pike/Swan Creek/York twps; part of >$200M ATSI NW Ohio program"
+      "name": "FE",
+      "entry": "https://outages-oh.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
+      "kubra_layer": "cluster-5",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -84.9,
+        "south": 37.1,
+        "east": -73.8,
+        "north": 42.9
+      },
+      "sub_regions": [
+        {
+          "name": "MD",
+          "bbox": {
+            "west": -79.6,
+            "south": 39.2,
+            "east": -77.0,
+            "north": 39.72
+          }
+        },
+        {
+          "name": "NJ",
+          "bbox": {
+            "west": -75.6,
+            "south": 38.8,
+            "east": -73.8,
+            "north": 41.4
+          }
+        },
+        {
+          "name": "PA-NY",
+          "bbox": {
+            "west": -80.6,
+            "south": 39.72,
+            "east": -74.4,
+            "north": 42.9
+          }
+        },
+        {
+          "name": "WV",
+          "bbox": {
+            "west": -82.7,
+            "south": 37.1,
+            "east": -77.7,
+            "north": 40.7
+          }
+        },
+        {
+          "name": "OH",
+          "bbox": {
+            "west": -84.9,
+            "south": 38.4,
+            "east": -80.5,
+            "north": 42.1
+          }
+        }
+      ]
     },
     {
-      "name": "Sylvania Twp substation expansion (Lucas Co.)",
-      "type": "substation",
-      "status": "complete",
-      "lat": 41.709,
-      "lon": -83.713,
-      "territory": "Toledo Edison",
-      "verify": true,
-      "source": "FE newsroom Oct 2024: ~$15M, 17k->49.9k sqft, sectionalized bus; in service early 2025; 20k+ customers"
+      "name": "OH-AEP",
+      "provider": "ifactor",
+      "base": "https://d6ss517do1xkp.cloudfront.net",
+      "entry": "https://outagemap.aepohio.com/",
+      "bbox": {
+        "west": -84.9,
+        "south": 38.3,
+        "east": -80.6,
+        "north": 41.4
+      }
     },
     {
-      "name": "Niles-Shenango 345kV line rebuild",
-      "type": "line",
-      "status": "construction",
-      "lat": 41.19,
-      "lon": -80.74,
-      "territory": "Ohio Edison (Mahoning Valley)",
-      "verify": true,
-      "source": "FE Ohio Transmission Projects list. Lordstown/Stargate corridor; point marks Niles end - route runs NE toward PA border"
+      "name": "OH-AES",
+      "provider": "aesxml",
+      "url": "https://myprofile.aes-ohio.com/DATA/DPLOMSDATA.xml",
+      "entry": "https://myprofile.aes-ohio.com/Outages/Outages.html",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.9,
+        "east": -82.7,
+        "north": 40.8
+      }
     },
     {
-      "name": "Lordstown substation (built for Ultium Cells)",
-      "type": "substation",
-      "status": "complete",
-      "lat": 41.155,
-      "lon": -80.875,
-      "territory": "Ohio Edison",
-      "verify": true,
-      "source": "FE newsroom Feb 2021: $19.6M substation + 0.5-mi 138kV tie for Ultium; precedent for large-load builds at the GM site now hosting Stargate"
+      "name": "OH-DUKE",
+      "provider": "duke",
+      "jurisdiction": "DEM",
+      "entry": "https://outagemap.duke-energy.com/",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.3,
+        "east": -83.4,
+        "north": 39.8
+      }
     }
-  ]
+  ],
+  "tile_workers": 8,
+  "alert_min_customers": 50,
+  "kubra_layer": "cluster-5",
+  "widen_max_zoom": 10,
+  "max_tiles_per_region": 20000,
+  "zoom_min": 8,
+  "zoom_max": 14,
+  "wind_gust_kmh_threshold": 45.0,
+  "wind_sustained_kmh_threshold": 32.0,
+  "precip_mm_hr_threshold": 2.5,
+  "temp_extreme_low_c": -12.0,
+  "temp_extreme_high_c": 35.0,
+  "dc_radius_km": 8.0,
+  "nws_user_agent": "GRIDWATCH outage-weather research (github.com/ParadoxSnowman/gridwatch)",
+  "weather_cell_deg": 0.25
 }
