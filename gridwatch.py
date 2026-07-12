@@ -347,6 +347,7 @@ class Kubra:
         bbox = self.region.get("bbox") or cfg["bbox"]
         tile_records = {}       # qk -> [rec, ...]  (only tiles WITH records)
         any_ever = False
+        out_of_box = 0
         tol = cfg.get("supersede_tolerance", 0.98)
 
         def key(rec):
@@ -386,19 +387,30 @@ class Kubra:
                     continue
                 any_ever = True
                 n_tiles += 1
-                recs = [r for r in
-                        (self._parse_item(i)
-                         for i in payload.get("file_data", []))
-                        if r]
+                recs = []
+                for item in payload.get("file_data", []):
+                    r = self._parse_item(item)
+                    if not r:
+                        continue
+                    if bbox and not (bbox["south"] <= r["lat"] <= bbox["north"]
+                                     and bbox["west"] <= r["lon"] <= bbox["east"]):
+                        out_of_box += 1
+                        continue
+                    recs.append(r)
                 if recs:
                     tile_records[qk] = recs
                     n_rec += len(recs)
                     if top_zoom is None:
                         top_zoom = zoom
                     next_frontier.extend(qk + d for d in "0123")
+                elif payload.get("file_data"):
+                    # answered, but everything was outside our bbox: the tile
+                    # straddles a border. Its children may still hold ours.
+                    next_frontier.extend(qk + d for d in "0123")
 
             print(f"[i] [{self.region['name']}] zoom {zoom}: "
-                  f"{len(frontier)} req, {n_tiles} ok, {n_rec} records")
+                  f"{len(frontier)} req, {n_tiles} ok, {n_rec} records"
+                  + (f", {out_of_box} outside bbox" if out_of_box else ""))
 
             if not tile_records:          # nothing found anywhere yet
                 if zoom < cfg.get("widen_max_zoom", 10):
