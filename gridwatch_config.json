@@ -12,7 +12,7 @@
      "entry": "https://outages-pa.firstenergycorp.com/",
      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
      "view_id": "8587e451-e258-4692-b5e8-28010506d51a",
-     "kubra_layer": "cluster-5",
+     "kubra_layer": "cluster-6",
      "max_tiles": 30000,
      "bbox": {"west": -80.6, "south": 39.6, "east": -74.4, "north": 42.9}},
 
