@@ -206,6 +206,76 @@
       "territory": "AEP Ohio (Columbus alley)",
       "verify": true,
       "source": "Large multi-building campus in the International Business Park; verify parcel via New Albany planning docs"
+    },
+    {
+      "name": "AWS Salem Twp (Susquehanna nuclear campus, Luzerne Co.)",
+      "operator": "Amazon Web Services",
+      "lat": 41.093,
+      "lon": -76.147,
+      "status": "construction",
+      "territory": "PPL \u2014 NOT FirstEnergy (context site)",
+      "verify": true,
+      "source": "Anchor of Amazon's $20B PA commitment (Shapiro, Jun 2025). AWS bought Talen's DC + ~1,200 acres; 15 buildings planned. NOTE: co-located at Susquehanna Steam Electric Station; PPL territory, so its outages will NOT appear on the FE map. Kept as corridor context."
+    },
+    {
+      "name": "AWS Falls Twp / Keystone Trade Center (Bucks Co.)",
+      "operator": "Amazon Web Services",
+      "lat": 40.135,
+      "lon": -74.76,
+      "status": "construction",
+      "territory": "PECO \u2014 NOT FirstEnergy (context site)",
+      "verify": true,
+      "source": "Second anchor of the $20B AWS PA plan; former US Steel Fairless Works, 1,800-acre NorthPoint redevelopment. Draws fully from the grid. PECO territory \u2014 context only."
+    },
+    {
+      "name": "AWS Kline Twp campus (Schuylkill Co.)",
+      "operator": "Amazon Web Services",
+      "lat": 40.83,
+      "lon": -76.03,
+      "status": "announced",
+      "territory": "Met-Ed / PPL border \u2014 VERIFY",
+      "verify": true,
+      "source": "DCD May 2026: 2.5M sq ft, 1,600 acres rezoned 'Special Data Center Overlay District', 15 buildings over a decade; Banks Twp also eyed. Territory must be confirmed \u2014 if Met-Ed, this is a live FE test site."
+    },
+    {
+      "name": "QTS Salem Twp land assembly (Luzerne Co.)",
+      "operator": "QTS (Blackstone)",
+      "lat": 41.07,
+      "lon": -76.21,
+      "status": "announced",
+      "territory": "PPL/Penelec border \u2014 VERIFY",
+      "verify": true,
+      "source": "Fox56 Mar 2026: major land deal closed, township supervisors approved; construction could begin fall 2026. Watch for groundbreaking \u2014 a clean before/after natural experiment if it lands in Penelec."
+    },
+    {
+      "name": "Homer City Energy Campus (Indiana Co.)",
+      "operator": "Homer City Redevelopment / Kiewit",
+      "lat": 40.514,
+      "lon": -79.195,
+      "status": "construction",
+      "territory": "Penelec",
+      "verify": true,
+      "source": "3,200-acre former coal plant; up to 4.5GW on-site gas; FE/Penelec interconnection. Power targeted 2027. Largely self-powered \u2014 distribution signal is construction-phase only."
+    },
+    {
+      "name": "Quantum Frederick (former Alcoa Eastalco, Frederick Co.)",
+      "operator": "Quantum Loophole",
+      "lat": 39.372,
+      "lon": -77.52,
+      "status": "construction",
+      "territory": "Potomac Edison",
+      "verify": true,
+      "source": "FE newsroom: Potomac Edison building a NEW SUBSTATION to serve this campus (PJM + MD PSC review). 2,100-acre master-planned DC campus on the old Alcoa smelter site, fiber-ringed to Ashburn VA via QLoop. THE flagship FE-territory test case outside Ohio \u2014 utility-confirmed, mid-construction, grid work in progress."
+    },
+    {
+      "name": "Fort Martin gas plant + DC load (Maidsville, Monongalia Co.)",
+      "operator": "Mon Power / Potomac Edison (FirstEnergy)",
+      "lat": 39.7,
+      "lon": -79.93,
+      "status": "announced",
+      "territory": "Mon Power",
+      "verify": true,
+      "source": "FE PR Feb 2026: 35-acre site next to Fort Martin Power Station for a new 1,200MW gas plant; PSC approval pending, site work as early as 2027. FE's own IRP says DC growth 'could change this forecast drastically'. Generation-side, not a DC itself \u2014 flagged as the WV load anchor to watch."
     }
   ]
 }
