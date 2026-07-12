@@ -1,5 +1,5 @@
 {
-  "_help": "Each FE state view uses its OWN cluster layer number (OH=5, PA=6, NJ=7, MD-WV=4) and its own currentState generation. Pinning the wrong layer silently 404s every tile — if a state ever goes blank, delete its kubra_layer line to force auto-detect and re-pin what the log prints.",
+  "_help": "Each KUBRA view has its own instance/view GUIDs AND its own cluster layer number (FE-OH=5, FE-PA=6, FE-NJ=7, FE-MDWV=4, NatGrid=2). A wrong layer silently 404s every tile — if a region goes blank, delete its kubra_layer line to force auto-detect, then re-pin what the log prints.",
   "regions": [
     {"name": "OH",
      "entry": "https://outages-oh.firstenergycorp.com/",
@@ -30,6 +30,14 @@
      "kubra_layer": "cluster-4",
      "max_tiles": 30000,
      "bbox": {"west": -82.7, "south": 37.1, "east": -77.0, "north": 40.7}},
+
+    {"name": "NY-NGRID",
+     "entry": "https://outagemap.ny.nationalgridus.com/",
+     "instance_id": "9cb2e5b7-d321-4575-a552-4ae7078cbc31",
+     "view_id": "1b69b604-7588-4753-8591-9f135a962a2f",
+     "kubra_layer": "cluster-2",
+     "max_tiles": 30000,
+     "bbox": {"west": -79.9, "south": 41.9, "east": -73.2, "north": 45.1}},
 
     {"name": "OH-AEP", "provider": "ifactor",
      "base": "https://d6ss517do1xkp.cloudfront.net",
