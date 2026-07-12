@@ -321,8 +321,27 @@ class Kubra:
         return self._finish({})
 
     def _finish(self, incidents):
+        """Label each outage. FirstEnergy serves ONE dataset across all its
+        state views, so we sweep once and assign a state label by point-in-
+        bbox against `sub_regions` (checked in order; first match wins).
+        This removes the duplicate sweeps and the cross-region double counting
+        that separate per-state regions caused."""
+        subs = self.region.get("sub_regions") or []
+        counts = {}
         for o in incidents.values():
-            o["region"] = self.region["name"]
+            label = self.region["name"]
+            for s in subs:
+                b = s["bbox"]
+                if (b["south"] <= o["lat"] <= b["north"]
+                        and b["west"] <= o["lon"] <= b["east"]):
+                    label = s["name"]
+                    break
+            o["region"] = label
+            counts[label] = counts.get(label, 0) + 1
+        if subs and counts:
+            print("[i] [{}] states: {}".format(
+                self.region["name"],
+                ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))))
         return list(incidents.values())
 
     def _descend(self, ctx):
@@ -387,30 +406,19 @@ class Kubra:
                     continue
                 any_ever = True
                 n_tiles += 1
-                recs = []
-                for item in payload.get("file_data", []):
-                    r = self._parse_item(item)
-                    if not r:
-                        continue
-                    if bbox and not (bbox["south"] <= r["lat"] <= bbox["north"]
-                                     and bbox["west"] <= r["lon"] <= bbox["east"]):
-                        out_of_box += 1
-                        continue
-                    recs.append(r)
+                recs = [r for r in
+                        (self._parse_item(i)
+                         for i in payload.get("file_data", []))
+                        if r]
                 if recs:
                     tile_records[qk] = recs
                     n_rec += len(recs)
                     if top_zoom is None:
                         top_zoom = zoom
                     next_frontier.extend(qk + d for d in "0123")
-                elif payload.get("file_data"):
-                    # answered, but everything was outside our bbox: the tile
-                    # straddles a border. Its children may still hold ours.
-                    next_frontier.extend(qk + d for d in "0123")
 
             print(f"[i] [{self.region['name']}] zoom {zoom}: "
-                  f"{len(frontier)} req, {n_tiles} ok, {n_rec} records"
-                  + (f", {out_of_box} outside bbox" if out_of_box else ""))
+                  f"{len(frontier)} req, {n_tiles} ok, {n_rec} records")
 
             if not tile_records:          # nothing found anywhere yet
                 if zoom < cfg.get("widen_max_zoom", 10):
@@ -434,17 +442,36 @@ class Kubra:
                 # children under-account (partial pyramid) — trust myself
             return mine
 
-        incidents = {}
-        roots = [qk for qk in tile_records if len(qk) == top_zoom]
+        # Roots = tiles with NO ancestor that also holds records. (Using
+        # "shallowest zoom" instead would orphan records that sit under a
+        # border tile whose own records were all filtered out by the bbox.)
+        roots = [qk for qk in tile_records
+                 if not any(qk[:i] in tile_records for i in range(1, len(qk)))]
+        resolved = {}
         coarse_cust = sum(cust(tile_records[qk]) for qk in roots)
         for qk in roots:
             for rec in resolve(qk):
-                incidents[key(rec)] = rec
+                resolved[key(rec)] = rec
+        # Border tiles legitimately carry neighbouring states' outages (a
+        # zoom-8 tile is ~90 miles wide, and FE serves one dataset across its
+        # views). Reconciliation above needed those records; the map does not.
+        # Filter to this region's bbox now that the tree is resolved.
+        incidents = {}
+        for k, rec in resolved.items():
+            if bbox and not (bbox["south"] <= rec["lat"] <= bbox["north"]
+                             and bbox["west"] <= rec["lon"] <= bbox["east"]):
+                out_of_box += 1
+                continue
+            incidents[k] = rec
         final_cust = sum(r.get("customers") or 0 for r in incidents.values())
+        if out_of_box:
+            print(f"[i] [{self.region['name']}] dropped {out_of_box} outages "
+                  f"outside region bbox (border-tile overlap)")
+        resolved_cust = sum(r.get("customers") or 0 for r in resolved.values())
         flag = ""
-        if coarse_cust and final_cust < coarse_cust * 0.95:
-            flag = (f"  [!] customers dropped vs top zoom "
-                    f"({coarse_cust}) — possible pyramid gap")
+        if coarse_cust and resolved_cust < coarse_cust * 0.95:
+            flag = (f"  [!] resolved customers {resolved_cust} < top-zoom "
+                    f"{coarse_cust} — possible pyramid gap")
         print(f"[i] [{self.region['name']}] {len(incidents)} outages, "
               f"{final_cust} customers (top-zoom total {coarse_cust}, "
               f"{tiles_requested} tiles){flag}")
