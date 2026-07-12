@@ -1367,6 +1367,19 @@ def _emit_json(emit_dir, polled_at, records, cfg):
         json.dump({"days": days}, f, separators=(",", ":"))
     _emit_durations(emit_dir, hist_dir, days)
 
+    # Copy the curated data layers next to the outage data so the static page
+    # has a single data root. (Without this the map silently serves whatever
+    # stale copy is already committed — edits to these files never appear.)
+    for src_name in ("datacenters.json", "infrastructure.json", "pjm_burden.json"):
+        p = os.path.join(BASE_DIR, src_name)
+        if not os.path.exists(p):
+            continue
+        with open(p) as fin, open(os.path.join(emit_dir, src_name), "w") as fout:
+            fout.write(fin.read())
+        print(f"[i] copied {src_name} -> {emit_dir}")
+    print(f"[i] emitted {len(records)} records -> {emit_dir}/latest.json "
+          f"+ history/{day}.ndjson")
+
 
 def _emit_durations(emit_dir, hist_dir, days, window=7, poll_minutes=15):
     """Restoration analytics from the last `window` days of observations:
