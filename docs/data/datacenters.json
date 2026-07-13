@@ -379,6 +379,61 @@
       "verify": true,
       "source": "Growth + industrial construction in the same county as Meta Bowling Green, but ~20km away. Tightest control we have.",
       "coverage": "polled"
+    },
+    {
+      "name": "Meta Jeffersonville (River Ridge Commerce Center, Clark Co. IN)",
+      "operator": "Meta / Turner Construction",
+      "lat": 38.403,
+      "lon": -85.618,
+      "status": "construction",
+      "territory": "Duke Energy Indiana",
+      "verify": true,
+      "source": "$800M, 700k sqft, opens late 2026 \u2014 Duke Indiana's ONLY large DC per Citizens Action Coalition. RECEIPTS: Duke is shifting $216M of network upgrades for this site onto all Duke IN ratepayers (IURC Cause No. 45647 TDSIC-5), and Meta got an IURC-approved carve-out to buy carbon-free power outside Duke's system. Construction active NOW = live test window.",
+      "coverage": "polled"
+    },
+    {
+      "name": "Plainfield / Indianapolis-west colo corridor (Hendricks Co. IN)",
+      "operator": "multiple (Digital Realty / STACK / DataBank family)",
+      "lat": 39.704,
+      "lon": -86.372,
+      "status": "announced",
+      "territory": "Duke Energy Indiana",
+      "verify": true,
+      "source": "The corridor Duke cites in its ~1.5GW combined-cycle gas filing 'citing data center demand around the Indianapolis-Plainfield corridor' (IURC decision expected mid-2026). Corridor centroid \u2014 refine per-parcel.",
+      "coverage": "polled"
+    },
+    {
+      "name": "CONTROL \u2014 Greenwood/Johnson Co. IN growth corridor",
+      "operator": "n/a",
+      "lat": 39.614,
+      "lon": -86.107,
+      "status": "control",
+      "territory": "Duke Energy Indiana",
+      "verify": true,
+      "source": "Fast-growing Indy suburb with heavy construction, NO data center. Control for the DEI feed.",
+      "coverage": "polled"
+    },
+    {
+      "name": "Meta Lebanon LEAP campus (Boone Co. IN)",
+      "operator": "Meta",
+      "lat": 40.014,
+      "lon": -86.46,
+      "status": "construction",
+      "territory": "Boone REMC / LEAP district \u2014 NOT Duke (context)",
+      "verify": true,
+      "source": "$10B+, 1GW, broke ground 2026 \u2014 Indiana's biggest build, but NOT in Duke territory (Boone REMC community fund per Meta's own announcement). Context-only: its outages won't appear in our DEI feed.",
+      "coverage": "context-only (utility not polled)"
+    },
+    {
+      "name": "Amazon New Carlisle 'Project Rainier' (St. Joseph Co. IN)",
+      "operator": "Amazon/AWS (Anthropic workloads)",
+      "lat": 41.708,
+      "lon": -86.44,
+      "status": "construction",
+      "territory": "Indiana Michigan Power (AEP) \u2014 NOT Duke (context)",
+      "verify": true,
+      "source": "$11B, 1,200 acres. I&M shifting $400M+ of connection costs onto ratepayers (Citizens Action). Context-only for now \u2014 becomes testable if we ever add I&M's iFactor feed (same AEP family as OH-AEP).",
+      "coverage": "context-only (utility not polled)"
     }
   ]
 }
