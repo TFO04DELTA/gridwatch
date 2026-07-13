@@ -1,5 +1,5 @@
 {
-  "_help": "Each KUBRA view has its own instance/view GUIDs AND its own cluster layer number (FE-OH=5, FE-PA=6, FE-NJ=7, FE-MDWV=4, NatGrid=2). A wrong layer silently 404s every tile — if a region goes blank, delete its kubra_layer line to force auto-detect, then re-pin what the log prints.",
+  "_help": "Each KUBRA view has its OWN instance/view GUIDs AND its own cluster layer (FE-OH=5, FE-PA=6, FE-NJ=7, FE-MDWV=4, NatGrid-NY=2). A wrong layer silently 404s every tile — if a region goes blank, delete its kubra_layer line to force auto-detect, then re-pin what the log prints. Duke regions need repo secret DUKE_BASIC_TOKEN passed as an env var by the workflow. AEP serves from CloudFront, not its own domain. AES is a plain XML feed.",
   "regions": [
     {"name": "OH",
      "entry": "https://outages-oh.firstenergycorp.com/",
@@ -50,8 +50,12 @@
      "bbox": {"west": -85.0, "south": 38.9, "east": -82.7, "north": 40.8}},
 
     {"name": "OH-DUKE", "provider": "duke", "jurisdiction": "DEM",
-     "entry": "https://outagemap.duke-energy.com/",
-     "bbox": {"west": -85.0, "south": 38.3, "east": -83.4, "north": 39.8}}
+     "entry": "https://outagemap.duke-energy.com/#/current-outages/ohky",
+     "bbox": {"west": -85.0, "south": 38.3, "east": -83.4, "north": 39.8}},
+
+    {"name": "IN-DUKE", "provider": "duke", "jurisdiction": "DEI",
+     "entry": "https://outagemap.duke-energy.com/#/current-outages/in",
+     "bbox": {"west": -88.1, "south": 37.7, "east": -84.7, "north": 40.9}}
   ],
   "tile_workers": 8,
   "alert_min_customers": 50,
