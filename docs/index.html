@@ -94,7 +94,12 @@
     </div>
 
     <div id="tab-live">
-      <div class="card"><h2>Regions</h2><div class="chips" id="regchips"></div></div>
+      <div class="card"><h2>Regions</h2><div class="chips" id="regchips"></div>
+        <div style="margin-top:8px"><span class="chip" id="reg-all">all</span>
+        <span class="chip" id="reg-none">none</span></div></div>
+      <div class="card"><h2>Feed status</h2>
+        <table id="feedtable"><thead><tr><th>feed</th><th class="n">out</th>
+        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
       <div class="card"><h2>Classification</h2><div id="legend"></div>
         <div style="margin-top:10px;display:flex;gap:8px">
           <button id="csv">Export CSV</button>
@@ -103,7 +108,17 @@
       <div class="card"><h2>Top events</h2>
         <table id="topev"><thead><tr><th>reg</th><th>cause</th>
         <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
-      <div class="card"><h2>Sites & layers</h2><div id="sitelist"></div></div>
+      <div class="card"><h2>Sites & layers</h2>
+        <input id="sitefilter" placeholder="filter sites…" style="width:100%;
+          background:var(--panel);border:1px solid var(--line);border-radius:8px;
+          color:var(--text);padding:6px 10px;margin-bottom:8px;font:inherit">
+        <div id="sitelist"></div>
+        <div class="caveat" style="margin-top:8px">
+          <b>solid ring</b> = active change (drives evidence) ·
+          <b>dashed</b> = operating (context) ·
+          <b>gray</b> = control corridor ·
+          <b>faded</b> = territory we don't poll</div></div>
+      <div class="card"><h2>Recent alerts</h2><div id="alertlist" class="meta">loading…</div></div>
     </div>
 
     <div id="tab-history" style="display:none">
@@ -145,6 +160,8 @@
           <div class="kpi"><div class="lbl">unique outages in window</div>
             <div class="big" id="kpi-n">—</div></div></div>
         <div class="caveat" id="ev-verdict"></div></div>
+      <div class="card"><h2>Active vs control</h2>
+        <div class="meta" id="ctl-compare">accumulating…</div></div>
       <div class="card"><h2>Per-site scorecard</h2>
         <table id="sitetable"><thead><tr><th>site</th><th>status</th>
           <th class="n">fair-wx</th><th class="n">total</th></tr></thead><tbody></tbody></table>
@@ -275,17 +292,52 @@ function regionChips(){
 }
 const liveLabel=()=>`${LATEST.count} outages · updated ${LATEST.generated_at} UTC`;
 
+function renderFeeds(){
+  const tb=document.querySelector("#feedtable tbody"); if(!tb) return;
+  tb.innerHTML="";
+  for(const f of (LATEST.feeds||[])){
+    const tr=document.createElement("tr");
+    if(f.error){
+      tr.innerHTML=`<td style="color:var(--red)">${esc(f.name)}</td>
+        <td colspan="2" style="color:var(--red);font-size:11px">${esc(f.error.slice(0,44))}</td>`;
+    } else {
+      tr.innerHTML=`<td>${esc(f.name)}</td><td class="n">${f.outages}</td>
+        <td class="n">${fmt(f.customers||0)}</td>`;
+    }
+    tb.appendChild(tr);
+  }
+  if(!(LATEST.feeds||[]).length)
+    tb.innerHTML=`<tr><td colspan="3" class="meta">feed stats appear after the next poll</td></tr>`;
+}
+async function renderAlerts(){
+  const el=document.getElementById("alertlist"); if(!el) return;
+  try{
+    const host=location.hostname.split(".")[0];
+    const repo=location.pathname.split("/").filter(Boolean)[0]||"gridwatch";
+    const r=await fetch(`https://api.github.com/repos/${host}/${repo}/issues?labels=gridwatch-alert&state=all&per_page=5`);
+    if(!r.ok) throw 0;
+    const issues=await r.json();
+    if(!issues.length){el.textContent="No DC-proximate fair-weather alerts yet — that's data too.";return;}
+    el.innerHTML=issues.map(i=>`<div style="margin:4px 0">
+      <a href="${i.html_url}" target="_blank" style="color:var(--accent)">${esc(i.title)}</a>
+      <span class="badge">${esc(i.created_at.slice(0,10))}</span></div>`).join("");
+  }catch(e){el.textContent="Alert history unavailable (GitHub API limit).";}
+}
+
+function isContext(s){return String(s.coverage||"").startsWith("context");}
 function drawDCs(){
   dcLayer.clearLayers();
   const list=document.getElementById("sitelist"); list.innerHTML="";
   for(const s of DCS){
     if(!s.lat) continue;
-    const isCtl=s.status==="control", isOp=(s.status||"").startsWith("operating");
-    const col=isCtl?"#64748b":isOp?"#dc8ca6":"#ef4444";
-    L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:col,weight:1,
+    const isCtl=s.status==="control", isOp=(s.status||"").startsWith("operating"),
+          isCtx=isContext(s);
+    const col=isCtx?"#4b5563":isCtl?"#64748b":isOp?"#dc8ca6":"#ef4444";
+    if(!isCtx) L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:col,weight:1,
       fillOpacity:isOp?0:.05,dashArray:isOp?"6 7":null,opacity:isOp?.5:1}).addTo(dcLayer);
-    L.circleMarker([s.lat,s.lon],{radius:5,color:col,fillColor:isCtl?"#334155":isOp?"#6d2438":"#7f1d1d",
-      fillOpacity:1,weight:2})
+    L.circleMarker([s.lat,s.lon],{radius:isCtx?4:5,color:col,
+      fillColor:isCtx?"#1f2937":isCtl?"#334155":isOp?"#6d2438":"#7f1d1d",
+      fillOpacity:isCtx?.5:1,weight:isCtx?1:2,opacity:isCtx?.55:1})
       .bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.operator)} — ${esc(s.status)}<br>
         <span style="color:#8a90a2">${esc(s.territory||"")}</span>
         ${s.verify?'<br><i style="color:#f59e0b">coords approximate — verify</i>':''}`)
@@ -359,8 +411,9 @@ async function fetchDay(d){const r=await fetch(`data/history/${d}.ndjson`);
 function evidence(records){
   const uniq=dedupe(records);
   const ACTIVE=new Set(["construction","contested","announced"]);
-  const real=DCS.filter(s=>s.lat&&ACTIVE.has(s.status));
-  const other=DCS.filter(s=>s.lat&&(s.status==="control"||(s.status||"").startsWith("operating")));
+  const polled=DCS.filter(s=>s.lat&&!isContext(s));
+  const real=polled.filter(s=>ACTIVE.has(s.status));
+  const other=polled.filter(s=>s.status==="control"||(s.status||"").startsWith("operating"));
   let nearF=0,nearT=0,farF=0,farT=0;
   const perSite=new Map(DCS.filter(s=>s.lat).map(s=>[s.name,{status:s.status,f:0,t:0}]));
   for(const o of uniq){
@@ -396,9 +449,25 @@ async function loadEvidence(windowDays){
       :"No elevation — the folk theory isn't showing up in reliability data. That's a finding too.");}
   document.getElementById("ev-verdict").textContent=verdict;
   const tb=document.querySelector("#sitetable tbody"); tb.innerHTML="";
-  [...ev.perSite.entries()].sort((a,b)=>b[1].f-a[1].f).forEach(([name,p])=>{
-    if(!p.t)return;
+  const rows=[...ev.perSite.entries()].filter(([,p])=>p.t);
+  const ACTIVE2=new Set(["construction","contested","announced"]);
+  let aF=0,aT=0,cF=0,cT=0;
+  for(const [,p] of rows){
+    if(ACTIVE2.has(p.status)){aF+=p.f;aT+=p.t;}
+    if(p.status==="control"){cF+=p.f;cT+=p.t;}
+  }
+  const cmp=document.getElementById("ctl-compare");
+  if(cmp){
+    const pc=(f,t)=>t?(100*f/t).toFixed(0)+"%":"—";
+    cmp.innerHTML=`Fair-weather share — <b>active sites ${pc(aF,aT)}</b> (${aF}/${aT})
+      vs <b>controls ${pc(cF,cT)}</b> (${cF}/${cT}). If these match, the signal
+      is "growth corridor", not "data center".`;
+  }
+  const order=s=>ACTIVE2.has(s)?0:s==="control"?1:2;
+  rows.sort((a,b)=>order(a[1].status)-order(b[1].status)||b[1].f-a[1].f)
+    .forEach(([name,p])=>{
     const tr=document.createElement("tr");
+    if(p.status==="control") tr.style.color="var(--dim)";
     tr.innerHTML=`<td>${esc(name.length>26?name.slice(0,25)+"…":name)}</td>
       <td>${esc(p.status)}</td><td class="n">${p.f}</td><td class="n">${p.t}</td>`;
     tb.appendChild(tr);});
@@ -488,6 +557,20 @@ async function boot(){
   PLINES=plines.lines||[];
   RADIUS=latest.dc_radius_km||8;
   drawDCs();drawAuto();drawInfra();drawPlines();regionChips();
+  renderFeeds();renderAlerts();
+  const sf=document.getElementById("sitefilter");
+  if(sf) sf.oninput=()=>{const q=sf.value.toLowerCase();
+    document.querySelectorAll("#sitelist .row").forEach(r=>{
+      r.style.display=r.textContent.toLowerCase().includes(q)?"":"none";});};
+  const setAll=on=>{activeRegions.clear();
+    document.querySelectorAll("#regchips .chip").forEach(c=>{
+      const r=c.textContent; if(on){activeRegions.add(r);c.classList.add("on");}
+      else c.classList.remove("on");});
+    if(!on) activeRegions.add("__none__");   // empty set means "show all"
+    plot(LATEST.outages||[],document.getElementById("live-meta"),liveLabel());};
+  const ra=document.getElementById("reg-all"),rn=document.getElementById("reg-none");
+  if(ra) ra.onclick=()=>setAll(true);
+  if(rn) rn.onclick=()=>setAll(false);
   plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
   try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());}
   catch(e){INDEX={days:[]};}
