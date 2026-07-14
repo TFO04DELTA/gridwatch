@@ -381,6 +381,45 @@ function drawInfra(){
   document.getElementById("sitelist").appendChild(row);
 }
 
+let PL_SUBS=[],PL_PLANTS=[];
+const subLayer=L.layerGroup(), plantLayer=L.layerGroup();
+function drawGridAssets(){
+  subLayer.clearLayers(); plantLayer.clearLayers();
+  for(const s of PL_SUBS){
+    const kv=parseInt(String(s.voltage).split(";")[0])||0;
+    L.circleMarker([s.lat,s.lon],{radius:4,color:"#fb923c",fillColor:"#7c2d12",
+      fillOpacity:.95,weight:1.5})
+      .bindPopup(`<b>⚡ ${esc(s.name)||"substation"}</b><br>
+        ${s.voltage?esc(String(s.voltage).replace(/000$/,""))+" kV · ":""}substation
+        ${s.operator?"<br>"+esc(s.operator):""}
+        <br><span style="color:#8a90a2;font-size:11px">OSM ${s.id}</span>`)
+      .addTo(subLayer);}
+  for(const p of PL_PLANTS){
+    L.circleMarker([p.lat,p.lon],{radius:6,color:"#a78bfa",fillColor:"#4c1d95",
+      fillOpacity:.95,weight:2})
+      .bindPopup(`<b>🏭 ${esc(p.name)||"power plant"}</b><br>
+        ${esc(p.source)||"?"} ${p.output?"· "+esc(p.output):""}
+        ${p.operator?"<br>"+esc(p.operator):""}
+        <br><span style="color:#8a90a2;font-size:11px">generation near a DC site —
+        proximity to supply is often WHY the site was chosen</span>`)
+      .addTo(plantLayer);}
+  const list=document.getElementById("sitelist");
+  if(PL_SUBS.length){
+    const row=document.createElement("div"); row.className="row off";
+    row.innerHTML=`<span class="dot" style="background:#fb923c"></span>
+      <span>Substations near sites (OSM)</span><span class="cnt">${PL_SUBS.length}</span>`;
+    row.onclick=()=>{if(map.hasLayer(subLayer)){map.removeLayer(subLayer);row.classList.add("off");}
+      else{map.addLayer(subLayer);row.classList.remove("off");}};
+    list.appendChild(row);}
+  if(PL_PLANTS.length){
+    const row=document.createElement("div"); row.className="row";
+    row.innerHTML=`<span class="dot" style="background:#a78bfa"></span>
+      <span>Power plants near sites (OSM)</span><span class="cnt">${PL_PLANTS.length}</span>`;
+    map.addLayer(plantLayer);
+    row.onclick=()=>{if(map.hasLayer(plantLayer)){map.removeLayer(plantLayer);row.classList.add("off");}
+      else{map.addLayer(plantLayer);row.classList.remove("off");}};
+    list.appendChild(row);}
+}
 function drawPlines(){
   plineLayer.clearLayers();
   for(const l of PLINES){
@@ -555,11 +594,12 @@ async function boot(){
   ]);
   LATEST=latest;DCS=dcs.sites||[];AUTO=auto.sites||[];INFRA=infra.projects||[];
   PLINES=plines.lines||[];
+  PL_SUBS=plines.substations||[]; PL_PLANTS=plines.plants||[];
   const fl=(latest.feeds||[]).filter(f=>!f.error).length;
   if(fl) document.getElementById("tagline").innerHTML=
     `outages &times; weather &times; data center proximity — ${fl} live utility feeds, Midwest&rarr;Atlantic`;
   RADIUS=latest.dc_radius_km||8;
-  drawDCs();drawAuto();drawInfra();drawPlines();regionChips();
+  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();regionChips();
   renderFeeds();
   const sf=document.getElementById("sitefilter");
   if(sf) sf.oninput=()=>{const q=sf.value.toLowerCase();
