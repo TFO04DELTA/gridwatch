@@ -434,6 +434,30 @@
       "verify": true,
       "source": "$11B, 1,200 acres. I&M shifting $400M+ of connection costs onto ratepayers (Citizens Action). Context-only for now \u2014 becomes testable if we ever add I&M's iFactor feed (same AEP family as OH-AEP).",
       "coverage": "context-only (utility not polled)"
+    },
+    {
+      "name": "Data Center Alley core (Ashburn/Loudoun Co. VA)",
+      "operator": "Digital Realty / Equinix / AWS / dozens",
+      "lat": 39.018,
+      "lon": -77.46,
+      "status": "operating (context anchor)",
+      "territory": "Dominion + NOVEC \u2014 NOT polled (context)",
+      "verify": true,
+      "powerlines": true,
+      "source": "Largest DC concentration on Earth (~25GW+ pipeline). Context anchor for the Burden tab story; powerlines flag pulls OSM transmission around it so the corridor renders. Becomes testable if/when we add a Dominion feed.",
+      "coverage": "context-only (utility not polled)"
+    },
+    {
+      "name": "PW Digital Gateway (Prince William Co. VA)",
+      "operator": "QTS / Compass (contested)",
+      "lat": 38.728,
+      "lon": -77.568,
+      "status": "operating (context anchor)",
+      "territory": "Dominion/NOVEC \u2014 NOT polled (context)",
+      "verify": true,
+      "powerlines": true,
+      "source": "2,100-acre corridor next to Manassas battlefield; litigation ongoing. Context anchor #2 for Alley transmission rendering.",
+      "coverage": "context-only (utility not polled)"
     }
   ]
 }
