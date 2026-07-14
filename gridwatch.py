@@ -1235,10 +1235,10 @@ def _fetch_region(cfg, region):
     try:
         outages = make_provider(cfg, region).fetch_outages()
         print(f"[i] {region['name']}: {len(outages)} unique outages")
-        return outages
+        return {"outages": outages, "error": None}
     except Exception as e:
         print(f"[!] region {region['name']} failed: {e}")
-        return []
+        return {"outages": [], "error": f"{type(e).__name__}: {e}"[:160]}
 
 
 def cmd_poll(cfg, emit_dir=None, no_db=False):
@@ -1253,8 +1253,15 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
     counts, emitted = {}, []
     print(f"[i] fetching {len(regions)} regions in parallel: "
           f"{', '.join(r['name'] for r in regions)}")
-    with ThreadPoolExecutor(max_workers=min(7, len(regions))) as pool:
-        region_results = list(pool.map(lambda r: _fetch_region(cfg, r), regions))
+    with ThreadPoolExecutor(max_workers=min(9, len(regions))) as pool:
+        results = list(pool.map(lambda r: _fetch_region(cfg, r), regions))
+    region_results = [r["outages"] for r in results]
+    feed_stats = [{"name": reg["name"],
+                   "outages": len(res["outages"]),
+                   "customers": sum(o.get("customers") or 0
+                                    for o in res["outages"]),
+                   "error": res["error"]}
+                  for reg, res in zip(regions, results)]
     all_pts = [(o["lat"], o["lon"]) for outs in region_results for o in outs]
     wx.prefetch(all_pts)
     for region, outages in zip(regions, region_results):
@@ -1346,7 +1353,7 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
         conn.commit()
         conn.close()
     if emit_dir:
-        _emit_json(emit_dir, polled_at, emitted, cfg)
+        _emit_json(emit_dir, polled_at, emitted, cfg, feeds=feed_stats)
         auto_path = os.path.join(emit_dir, "datacenters_auto.json")
         if _auto_layer_stale(auto_path):
             fetch_auto_datacenters(cfg, auto_path)
