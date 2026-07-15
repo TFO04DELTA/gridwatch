@@ -805,6 +805,81 @@ class AESXml(Kubra):
         return out
 
 
+class XmlFeed(Kubra):
+    """Generic single-file XML outage feed (NOVEC stormcenter style:
+    /stormcenter/data/outagedtl.xml). Root observed live as <outages/>;
+    child schema unknown until outages exist, so field extraction is
+    heuristic over both child tags and attributes, and unparseable records
+    are dumped to the log for a one-paste fix."""
+
+    LAT_KEYS = ("lat", "latitude", "y")
+    LON_KEYS = ("lon", "lng", "long", "longitude", "x")
+    CUST_KEYS = ("consumersaffected", "custaffected", "customersaffected",
+                 "consumers", "custout", "numout", "affected", "cust")
+    ID_KEYS = ("id", "outageid", "outage_id", "case", "casenumber", "number",
+               "incidentid")
+    ETR_KEYS = ("etr", "estimatedrestoration", "est_restore", "restoretime",
+                "esttime")
+    CAUSE_KEYS = ("cause", "reason")
+
+    def fetch_outages(self):
+        import xml.etree.ElementTree as ET
+        url = self.region["url"]
+        self.s.headers.update({"User-Agent": IFactor.BROWSER_UA,
+                               "Referer": self.region.get("entry", url)})
+        r = self.s.get(f"{url}?{int(time.time()*1000)}", timeout=30)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        bbox = self.region.get("bbox") or {}
+
+        def fields(el):
+            d = {k.lower(): (v or "").strip() for k, v in el.attrib.items()}
+            for c in el:
+                tag = c.tag.split("}")[-1].lower()
+                if c.text and c.text.strip():
+                    d.setdefault(tag, c.text.strip())
+                d.update({f"{tag}.{k.lower()}": (v or "").strip()
+                          for k, v in c.attrib.items()})
+            return d
+
+        def pick(d, keys):
+            for k in keys:
+                for dk, v in d.items():
+                    if dk == k or dk.endswith("." + k):
+                        if v:
+                            return v
+            return ""
+
+        out, dumped = [], False
+        for el in list(root):
+            d = fields(el)
+            try:
+                lat = float(pick(d, self.LAT_KEYS))
+                lon = float(pick(d, self.LON_KEYS))
+            except ValueError:
+                if not dumped:
+                    import xml.etree.ElementTree as ET2
+                    print(f"[!] [{self.region['name']}] unparsed record — "
+                          f"paste this to fix the mapping: "
+                          f"{ET2.tostring(el, encoding='unicode')[:400]}")
+                    dumped = True
+                continue
+            if bbox and not (bbox["south"] <= lat <= bbox["north"]
+                             and bbox["west"] <= lon <= bbox["east"]):
+                continue
+            cust = pick(d, self.CUST_KEYS)
+            out.append({"outage_id": pick(d, self.ID_KEYS) or f"{lat},{lon}",
+                        "lat": round(lat, 5), "lon": round(lon, 5),
+                        "customers": int(float(cust)) if cust else 0,
+                        "cause": pick(d, self.CAUSE_KEYS),
+                        "crew_status": "",
+                        "etr": pick(d, self.ETR_KEYS),
+                        "cluster": False,
+                        "region": self.region["name"]})
+        print(f"[i] [{self.region['name']}] xml feed: {len(out)} outages")
+        return out
+
+
 def make_provider(cfg, region):
     p = region.get("provider", "kubra")
     if p == "ifactor":
@@ -813,6 +888,8 @@ def make_provider(cfg, region):
         return DukeAPI(cfg, region=region)
     if p == "aesxml":
         return AESXml(cfg, region=region)
+    if p == "xmlfeed":
+        return XmlFeed(cfg, region=region)
     return Kubra(cfg, region=region)
 
 
@@ -1206,7 +1283,7 @@ def _region_ready(r):
         return bool(r.get("base"))
     if p == "duke":
         return True
-    if p == "aesxml":
+    if p in ("aesxml", "xmlfeed"):
         return bool(r.get("url"))
     return bool(r.get("instance_id") and r.get("view_id"))
 
