@@ -880,6 +880,138 @@ class XmlFeed(Kubra):
         return out
 
 
+class PPLOmap(Kubra):
+    """PPL Electric (+ Rhode Island Energy) custom OMAP API.
+      GET https://omap.prod.pplweb.com/OMAP/api/Omap/Outage/Clusters/{zoom}?opco=PA
+    Flat JSON array of {id, a:lat, o:lon, nc:customersOut}. id==0 is an
+    unexpanded aggregate cluster; higher zoom splits it. We fetch coarse,
+    then re-request only cluster cells at deeper zoom until they resolve to
+    id!=0 points or we hit zoom cap. No per-tile URLs — zoom is a single
+    query param, so 'descent' here means bumping the zoom for the whole map
+    and de-duplicating by (id, rounded lat/lon)."""
+
+    API = "https://omap.prod.pplweb.com/OMAP/api/Omap/Outage/Clusters"
+
+    def fetch_outages(self):
+        opco = self.region.get("opco", "PA")
+        self.s.headers.update({"Accept": "application/json",
+                               "User-Agent": IFactor.BROWSER_UA,
+                               "Referer": self.region.get("entry", self.API)})
+        bbox = self.region.get("bbox") or {}
+        zmin = self.region.get("omap_zoom_min", 8)
+        zmax = self.region.get("omap_zoom_max", 14)
+        seen, out, cluster_seen = {}, [], False
+        for z in range(zmin, zmax + 1):
+            try:
+                r = self.s.get(f"{self.API}/{z}?opco={opco}", timeout=30)
+                r.raise_for_status()
+                rows = r.json()
+            except (requests.RequestException, ValueError) as e:
+                print(f"[!] [{self.region['name']}] omap zoom {z}: {e}")
+                continue
+            zc = 0
+            for it in rows:
+                try:
+                    lat = float(it["a"]); lon = float(it["o"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                nc = it.get("nc") or 0
+                oid = it.get("id", 0)
+                if oid == 0:      # unexpanded cluster — count once, keep drilling
+                    zc += 1; cluster_seen = True
+                    continue
+                if bbox and not (bbox["south"] <= lat <= bbox["north"]
+                                 and bbox["west"] <= lon <= bbox["east"]):
+                    continue
+                k = f"{oid}"
+                seen[k] = {"outage_id": str(oid), "lat": round(lat, 5),
+                           "lon": round(lon, 5),
+                           "customers": int(nc) if nc else 0,
+                           "cause": "", "crew_status": "", "etr": "",
+                           "cluster": False, "region": self.region["name"]}
+            print(f"[i] [{self.region['name']}] omap zoom {z}: "
+                  f"{len(rows)} cells, {zc} clusters, {len(seen)} points")
+            if zc == 0 and z > zmin:
+                break     # everything resolved to points
+        out = list(seen.values())
+        # if the deepest zoom STILL had clusters, surface aggregate customer
+        # counts so a big storm cluster isn't dropped to zero
+        if cluster_seen and not out:
+            print(f"[!] [{self.region['name']}] all cells still clustered at "
+                  f"zoom {zmax}; reporting cluster centroids as points")
+            try:
+                r = self.s.get(f"{self.API}/{zmax}?opco={opco}", timeout=30)
+                for it in r.json():
+                    lat, lon = float(it["a"]), float(it["o"])
+                    if bbox and not (bbox["south"] <= lat <= bbox["north"]
+                                     and bbox["west"] <= lon <= bbox["east"]):
+                        continue
+                    out.append({"outage_id": f"cluster-{lat:.3f},{lon:.3f}",
+                                "lat": round(lat, 5), "lon": round(lon, 5),
+                                "customers": int(it.get("nc") or 0),
+                                "cause": "", "crew_status": "", "etr": "",
+                                "cluster": True, "region": self.region["name"]})
+            except (requests.RequestException, ValueError):
+                pass
+        print(f"[i] [{self.region['name']}] omap: {len(out)} outages")
+        return out
+
+
+class AvangridAPI(Kubra):
+    """Avangrid utilities (NYSEG, RG&E, CMP). REST behind an Apigee-style
+    gateway needing an ocp-apim-subscription-key (public, from their JS).
+      GET https://apim.avangrid.com/{opco}/v1/public/outagedata?...&filter=county
+    NOTE: filter=county returns COUNTY AGGREGATES (centroids + totals), not
+    point outages — the only public granularity. We emit county centroids as
+    cluster points and label them so the map/UI don't imply false precision.
+    Key from env AVANGRID_KEY or region['subscription_key']."""
+
+    API = "https://apim.avangrid.com"
+
+    def fetch_outages(self):
+        opco = self.region.get("opco")
+        key = (os.environ.get("AVANGRID_KEY")
+               or self.region.get("subscription_key"))
+        if not (opco and key):
+            raise RuntimeError(
+                f"[{self.region['name']}] needs opco + subscription key "
+                f"(set repo secret AVANGRID_KEY, exposed as env var).")
+        b = self.region.get("bbox") or {}
+        params = (f"north={b.get('north',45)}&south={b.get('south',40)}"
+                  f"&east={b.get('east',-73)}&west={b.get('west',-80)}"
+                  f"&filter=county")
+        self.s.headers.update({
+            "Accept": "application/json",
+            "ocp-apim-subscription-key": key,
+            "Origin": self.region.get("origin", "https://portal.nyseg.com"),
+            "Referer": self.region.get("entry", ""),
+            "User-Agent": IFactor.BROWSER_UA})
+        r = self.s.get(f"{self.API}/{opco}/v1/public/outagedata?{params}",
+                       timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        rows = (data.get("counties") or data.get("data")
+                or data.get("outages") or (data if isinstance(data, list) else []))
+        out = []
+        for c in rows if isinstance(rows, list) else []:
+            lat = c.get("lat") or c.get("latitude") or (c.get("centroid") or {}).get("lat")
+            lon = c.get("lon") or c.get("lng") or c.get("longitude") or (c.get("centroid") or {}).get("lon")
+            cust = (c.get("customersAffected") or c.get("custOut")
+                    or c.get("numOut") or c.get("affected") or 0)
+            if lat is None or lon is None:
+                continue
+            name = c.get("county") or c.get("name") or "county"
+            out.append({"outage_id": f"county-{name}",
+                        "lat": round(float(lat), 5), "lon": round(float(lon), 5),
+                        "customers": int(cust) if cust else 0,
+                        "cause": "", "crew_status": "",
+                        "etr": "", "cluster": True,
+                        "region": self.region["name"]})
+        print(f"[i] [{self.region['name']}] avangrid: {len(out)} county "
+              f"aggregates (not point-level)")
+        return out
+
+
 def make_provider(cfg, region):
     p = region.get("provider", "kubra")
     if p == "ifactor":
@@ -890,6 +1022,10 @@ def make_provider(cfg, region):
         return AESXml(cfg, region=region)
     if p == "xmlfeed":
         return XmlFeed(cfg, region=region)
+    if p == "pplomap":
+        return PPLOmap(cfg, region=region)
+    if p == "avangrid":
+        return AvangridAPI(cfg, region=region)
     return Kubra(cfg, region=region)
 
 
@@ -1285,6 +1421,10 @@ def _region_ready(r):
         return True
     if p in ("aesxml", "xmlfeed"):
         return bool(r.get("url"))
+    if p == "pplomap":
+        return True
+    if p == "avangrid":
+        return bool(r.get("opco"))
     return bool(r.get("instance_id") and r.get("view_id"))
 
 
