@@ -1,61 +1,225 @@
 {
-  "_help": "Each KUBRA view has its OWN instance/view GUIDs AND its own cluster layer (FE-OH=5, FE-PA=6, FE-NJ=7, FE-MDWV=4, NatGrid-NY=2). A wrong layer silently 404s every tile — if a region goes blank, delete its kubra_layer line to force auto-detect, then re-pin what the log prints. Duke regions need repo secret DUKE_BASIC_TOKEN passed as an env var by the workflow. AEP serves from CloudFront, not its own domain. AES is a plain XML feed.",
+  "_help": "Each KUBRA view has its OWN instance/view GUIDs AND its own cluster layer (FE-OH=5, FE-PA=6, FE-NJ=7, FE-MDWV=4, NatGrid-NY=2). A wrong layer silently 404s every tile \u2014 if a region goes blank, delete its kubra_layer line to force auto-detect, then re-pin what the log prints. Duke regions need repo secret DUKE_BASIC_TOKEN passed as an env var by the workflow. AEP serves from CloudFront, not its own domain. AES is a plain XML feed.",
   "regions": [
-    {"name": "OH",
-     "entry": "https://outages-oh.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
-     "kubra_layer": "cluster-5",
-     "bbox": {"west": -84.9, "south": 38.4, "east": -80.4, "north": 42.1}},
-
-    {"name": "PA-NY",
-     "entry": "https://outages-pa.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "8587e451-e258-4692-b5e8-28010506d51a",
-     "kubra_layer": "cluster-6",
-     "max_tiles": 30000,
-     "bbox": {"west": -80.6, "south": 39.6, "east": -74.4, "north": 42.9}},
-
-    {"name": "NJ",
-     "entry": "https://outages-nj.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "fcd7c23d-de37-4471-8ca3-37c3260f94fa",
-     "kubra_layer": "cluster-7",
-     "bbox": {"west": -75.7, "south": 38.8, "east": -73.8, "north": 41.4}},
-
-    {"name": "MD-WV",
-     "entry": "https://outages-mdwv.firstenergycorp.com/",
-     "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
-     "view_id": "5ed3ddf1-3a6f-4cfd-8957-eba54b5baaad",
-     "kubra_layer": "cluster-4",
-     "max_tiles": 30000,
-     "bbox": {"west": -82.7, "south": 37.1, "east": -77.0, "north": 40.7}},
-
-    {"name": "NY-NGRID",
-     "entry": "https://outagemap.ny.nationalgridus.com/",
-     "instance_id": "9cb2e5b7-d321-4575-a552-4ae7078cbc31",
-     "view_id": "1b69b604-7588-4753-8591-9f135a962a2f",
-     "kubra_layer": "cluster-2",
-     "max_tiles": 30000,
-     "bbox": {"west": -79.9, "south": 41.9, "east": -73.2, "north": 45.1}},
-
-    {"name": "OH-AEP", "provider": "ifactor",
-     "base": "https://d6ss517do1xkp.cloudfront.net",
-     "entry": "https://outagemap.aepohio.com/",
-     "bbox": {"west": -84.9, "south": 38.3, "east": -80.6, "north": 41.4}},
-
-    {"name": "OH-AES", "provider": "aesxml",
-     "url": "https://myprofile.aes-ohio.com/DATA/DPLOMSDATA.xml",
-     "entry": "https://myprofile.aes-ohio.com/Outages/Outages.html",
-     "bbox": {"west": -85.0, "south": 38.9, "east": -82.7, "north": 40.8}},
-
-    {"name": "OH-DUKE", "provider": "duke", "jurisdiction": "DEM",
-     "entry": "https://outagemap.duke-energy.com/#/current-outages/ohky",
-     "bbox": {"west": -85.0, "south": 38.3, "east": -83.4, "north": 39.8}},
-
-    {"name": "IN-DUKE", "provider": "duke", "jurisdiction": "DEI",
-     "entry": "https://outagemap.duke-energy.com/#/current-outages/in",
-     "bbox": {"west": -88.1, "south": 37.7, "east": -84.7, "north": 40.9}}
+    {
+      "name": "OH",
+      "entry": "https://outages-oh.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "db9c3f02-0a06-4672-a357-0f676eb75bfa",
+      "kubra_layer": "cluster-5",
+      "bbox": {
+        "west": -84.9,
+        "south": 38.4,
+        "east": -80.4,
+        "north": 42.1
+      }
+    },
+    {
+      "name": "PA-NY",
+      "entry": "https://outages-pa.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "8587e451-e258-4692-b5e8-28010506d51a",
+      "kubra_layer": "cluster-6",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -80.6,
+        "south": 39.6,
+        "east": -74.4,
+        "north": 42.9
+      }
+    },
+    {
+      "name": "NJ",
+      "entry": "https://outages-nj.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "fcd7c23d-de37-4471-8ca3-37c3260f94fa",
+      "kubra_layer": "cluster-7",
+      "bbox": {
+        "west": -75.7,
+        "south": 38.8,
+        "east": -73.8,
+        "north": 41.4
+      }
+    },
+    {
+      "name": "MD-WV",
+      "entry": "https://outages-mdwv.firstenergycorp.com/",
+      "instance_id": "6c715f0e-bbec-465f-98cc-0b81623744be",
+      "view_id": "5ed3ddf1-3a6f-4cfd-8957-eba54b5baaad",
+      "kubra_layer": "cluster-4",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -82.7,
+        "south": 37.1,
+        "east": -77.0,
+        "north": 40.7
+      }
+    },
+    {
+      "name": "NY-NGRID",
+      "entry": "https://outagemap.ny.nationalgridus.com/",
+      "instance_id": "9cb2e5b7-d321-4575-a552-4ae7078cbc31",
+      "view_id": "1b69b604-7588-4753-8591-9f135a962a2f",
+      "kubra_layer": "cluster-2",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -79.9,
+        "south": 41.9,
+        "east": -73.2,
+        "north": 45.1
+      }
+    },
+    {
+      "name": "OH-AEP",
+      "provider": "ifactor",
+      "base": "https://d6ss517do1xkp.cloudfront.net",
+      "entry": "https://outagemap.aepohio.com/",
+      "bbox": {
+        "west": -84.9,
+        "south": 38.3,
+        "east": -80.6,
+        "north": 41.4
+      }
+    },
+    {
+      "name": "OH-AES",
+      "provider": "aesxml",
+      "url": "https://myprofile.aes-ohio.com/DATA/DPLOMSDATA.xml",
+      "entry": "https://myprofile.aes-ohio.com/Outages/Outages.html",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.9,
+        "east": -82.7,
+        "north": 40.8
+      }
+    },
+    {
+      "name": "OH-DUKE",
+      "provider": "duke",
+      "jurisdiction": "DEM",
+      "entry": "https://outagemap.duke-energy.com/#/current-outages/ohky",
+      "bbox": {
+        "west": -85.0,
+        "south": 38.3,
+        "east": -83.4,
+        "north": 39.8
+      }
+    },
+    {
+      "name": "IN-DUKE",
+      "provider": "duke",
+      "jurisdiction": "DEI",
+      "entry": "https://outagemap.duke-energy.com/#/current-outages/in",
+      "bbox": {
+        "west": -88.1,
+        "south": 37.7,
+        "east": -84.7,
+        "north": 40.9
+      }
+    },
+    {
+      "name": "VA-DOM",
+      "entry": "https://outagemap.dominionenergy.com/",
+      "instance_id": "9c691bb6-767e-4532-b00e-286ac9adc223",
+      "view_id": "38b5394c-8bca-4dfd-ac59-b321615446bd",
+      "kubra_layer": "cluster-1",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -79.6,
+        "south": 36.0,
+        "east": -75.0,
+        "north": 39.3
+      }
+    },
+    {
+      "name": "NC-DEC",
+      "provider": "duke",
+      "jurisdiction": "DEC",
+      "entry": "https://outagemap.duke-energy.com/#/current-outages/nc",
+      "bbox": {
+        "west": -83.6,
+        "south": 33.9,
+        "east": -79.7,
+        "north": 36.7
+      }
+    },
+    {
+      "name": "BGE",
+      "entry": "https://outagemap.bge.com/",
+      "instance_id": "3db5fd35-4a88-465f-8985-8db3eb760b61",
+      "view_id": "1b43510f-b947-437b-9879-c0bd8f6d7816",
+      "_note": "Exelon capture A. If this shows ~0 while PECO shows Baltimore-shaped data, swap the two instance+view pairs.",
+      "bbox": {
+        "west": -77.4,
+        "south": 38.2,
+        "east": -75.9,
+        "north": 39.8
+      }
+    },
+    {
+      "name": "PECO",
+      "entry": "https://www.peco.com/outages/",
+      "instance_id": "39e6d9f3-fdea-4539-848f-b8631945da6f",
+      "view_id": "789577bd-d2c6-42b8-af4b-b51ae6f52b6c",
+      "_note": "Exelon capture B \u2014 swap with BGE if geography lands wrong.",
+      "bbox": {
+        "west": -76.2,
+        "south": 39.6,
+        "east": -74.7,
+        "north": 40.7
+      }
+    },
+    {
+      "name": "MA-NGRID",
+      "entry": "https://outagemap.ma.nationalgridus.com/",
+      "instance_id": "9cb2e5b7-d321-4575-a552-4ae7078cbc31",
+      "view_id": "ec79df5b-2c54-4fb9-a86a-b20775678236",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -73.6,
+        "south": 41.2,
+        "east": -69.8,
+        "north": 42.95
+      }
+    },
+    {
+      "name": "NE-EVERSOURCE",
+      "provider": "ifactor",
+      "base": "https://outagemap.eversource.com",
+      "entry": "https://outagemap.eversource.com/",
+      "max_tiles": 30000,
+      "bbox": {
+        "west": -73.8,
+        "south": 40.9,
+        "east": -70.0,
+        "north": 45.4
+      }
+    },
+    {
+      "name": "VA-NOVEC",
+      "provider": "xmlfeed",
+      "url": "https://www.novec.com/stormcenter/data/outagedtl.xml",
+      "entry": "https://www.novec.com/stormcenter/index.cfm",
+      "bbox": {
+        "west": -78.15,
+        "south": 38.35,
+        "east": -77.05,
+        "north": 39.15
+      }
+    },
+    {
+      "name": "NC-DEP",
+      "provider": "duke",
+      "jurisdiction": "DEP",
+      "entry": "https://outagemap.duke-energy.com/#/current-outages/nc",
+      "_note": "DEP = Duke Energy Progress standard code, inferred from confirmed DEM/DEI/DEC pattern. If Feed Status shows a 4xx here, capture the real code: select 'Duke Energy Progress' on their NC map, filter 'jurisdiction'.",
+      "bbox": {
+        "west": -80.1,
+        "south": 33.8,
+        "east": -75.4,
+        "north": 36.6
+      }
+    }
   ],
   "tile_workers": 8,
   "alert_min_customers": 50,
