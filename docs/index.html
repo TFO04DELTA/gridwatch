@@ -443,7 +443,36 @@ function drawInfra(){
   document.getElementById("sitelist").appendChild(row);
 }
 
-let PL_SUBS=[],PL_PLANTS=[];
+let PL_SUBS=[],PL_PLANTS=[],BACKBONE=[];
+const bbLayers={hi:L.layerGroup(),mid:L.layerGroup(),lo:L.layerGroup()};
+function drawBackbone(){
+  for(const k in bbLayers) bbLayers[k].clearLayers();
+  if(!BACKBONE.length) return;
+  const tier=v=>v>=700000?"hi":v>=450000?"mid":"lo";
+  const style={hi:{color:"#ef4444",weight:3.5,opacity:.75},
+               mid:{color:"#f97316",weight:2.5,opacity:.65},
+               lo:{color:"#eab308",weight:1.5,opacity:.5}};
+  const cnt={hi:0,mid:0,lo:0};
+  for(const l of BACKBONE){
+    const t=tier(l.v); cnt[t]++;
+    L.polyline(l.geom,style[t])
+      .bindPopup(`<b>${esc(l.name)||"HV line"}</b><br>${Math.round(l.v/1000)} kV
+        ${l.operator?"· "+esc(l.operator):""}
+        <br><span style="color:#8a90a2;font-size:11px">OSM backbone layer</span>`)
+      .addTo(bbLayers[t]);}
+  map.addLayer(bbLayers.hi); map.addLayer(bbLayers.mid);   // 765+500 on, 345 off
+  const list=document.getElementById("sitelist");
+  const defs=[["hi","765 kV backbone","#ef4444",true],["mid","500 kV backbone","#f97316",true],
+              ["lo","345 kV backbone","#eab308",false]];
+  for(const [k,label,col,on] of defs){
+    if(!cnt[k]) continue;
+    const row=document.createElement("div"); row.className="row"+(on?"":" off");
+    row.innerHTML=`<span class="dot" style="background:${col}"></span>
+      <span>${label}</span><span class="cnt">${cnt[k]}</span>`;
+    row.onclick=()=>{if(map.hasLayer(bbLayers[k])){map.removeLayer(bbLayers[k]);row.classList.add("off");}
+      else{map.addLayer(bbLayers[k]);row.classList.remove("off");}};
+    list.appendChild(row);}
+}
 const subLayer=L.layerGroup(), plantLayer=L.layerGroup();
 function drawGridAssets(){
   subLayer.clearLayers(); plantLayer.clearLayers();
@@ -675,11 +704,12 @@ async function boot(){
   LATEST=latest;DCS=dcs.sites||[];AUTO=auto.sites||[];INFRA=infra.projects||[];
   PLINES=plines.lines||[];
   PL_SUBS=plines.substations||[]; PL_PLANTS=plines.plants||[];
+  try{BACKBONE=(await fetch("data/backbone.json").then(r=>r.json())).lines||[];}catch(e){BACKBONE=[];}
   const fl=(latest.feeds||[]).filter(f=>!f.error).length;
   if(fl) document.getElementById("tagline").innerHTML=
     `outages &times; weather &times; data center proximity — ${fl} live utility feeds, Midwest&rarr;Atlantic`;
   RADIUS=latest.dc_radius_km||8;
-  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();regionChips();
+  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();drawBackbone();regionChips();
   renderFeeds();
   const sf=document.getElementById("sitefilter");
   if(sf) sf.oninput=()=>{const q=sf.value.toLowerCase();
