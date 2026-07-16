@@ -1,7 +1,7 @@
 # GRIDWATCH — FE Ohio outage / weather / data-center correlator
 
 ## What it does
-Polls FirstEnergy Ohio's KUBRA StormCenter outage feed, enriches every outage
+Polls most of the eastern-seaboards outage feeds, enriches every outage
 with trailing-3h weather (Open-Meteo) and active NWS alerts, computes distance
 to each site in `datacenters.json`, classifies, logs to SQLite, and renders a
 folium map. The `report` command answers the actual question longitudinally:
