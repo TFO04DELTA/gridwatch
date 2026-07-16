@@ -311,6 +311,18 @@
         "east": -78.5,
         "north": 35.2
       }
+    },
+    {
+      "name": "PA-PPL",
+      "provider": "pplomap",
+      "opco": "PA",
+      "entry": "https://www.pplelectric.com/outages",
+      "bbox": {
+        "west": -78.35,
+        "south": 39.72,
+        "east": -74.7,
+        "north": 41.75
+      }
     }
   ],
   "tile_workers": 8,
