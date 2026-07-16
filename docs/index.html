@@ -403,8 +403,7 @@ function drawAuto(){
       <br><span style="color:#8a90a2">OSM-mapped operating facility (context tier)</span>`)
     .addTo(autoLayer);}
   if(!AUTO.length) return;
-  map.addLayer(autoLayer);
-  const row=document.createElement("div"); row.className="row";
+  const row=document.createElement("div"); row.className="row off";
   row.innerHTML=`<span class="dot" style="background:#475569"></span>
     <span>OSM-mapped facilities (auto)</span><span class="cnt">${AUTO.length}</span>`;
   row.onclick=()=>{if(map.hasLayer(autoLayer)){map.removeLayer(autoLayer);row.classList.add("off");}
@@ -476,62 +475,64 @@ function drawBackbone(){
                mid:{color:"#f97316",weight:2.5,opacity:.65},
                lo:{color:"#eab308",weight:1.5,opacity:.5}};
   const cnt={hi:0,mid:0,lo:0};
-  for(const l of BACKBONE){
-    const t=tier(l.v); cnt[t]++;
-    L.polyline(l.geom,style[t])
-      .bindPopup(`<b>${esc(l.name)||"HV line"}</b><br>${Math.round(l.v/1000)} kV
-        ${l.operator?"· "+esc(l.operator):""}
-        <br><span style="color:#8a90a2;font-size:11px">OSM backbone layer</span>`)
-      .addTo(bbLayers[t]);}
-  map.addLayer(bbLayers.hi); map.addLayer(bbLayers.mid);   // 765+500 on, 345 off
+  for(const l of BACKBONE) cnt[tier(l.v)]++;
+  const built={hi:false,mid:false,lo:false};
+  const build=k=>{ if(built[k]) return; built[k]=true;
+    for(const l of BACKBONE){ if(tier(l.v)!==k) continue;
+      L.polyline(l.geom,style[k])
+        .bindPopup(`<b>${esc(l.name)||"HV line"}</b><br>${Math.round(l.v/1000)} kV
+          ${l.operator?"· "+esc(l.operator):""}
+          <br><span style="color:#8a90a2;font-size:11px">OSM backbone layer</span>`)
+        .addTo(bbLayers[k]);}};
   const list=document.getElementById("sitelist");
-  const defs=[["hi","765 kV backbone","#ef4444",true],["mid","500 kV backbone","#f97316",true],
-              ["lo","345 kV backbone","#eab308",false]];
-  for(const [k,label,col,on] of defs){
+  const defs=[["hi","765 kV backbone","#ef4444"],["mid","500 kV backbone","#f97316"],
+              ["lo","345 kV backbone","#eab308"]];
+  for(const [k,label,col] of defs){
     if(!cnt[k]) continue;
-    const row=document.createElement("div"); row.className="row"+(on?"":" off");
+    const row=document.createElement("div"); row.className="row off";
     row.innerHTML=`<span class="dot" style="background:${col}"></span>
       <span>${label}</span><span class="cnt">${cnt[k]}</span>`;
     row.onclick=()=>{if(map.hasLayer(bbLayers[k])){map.removeLayer(bbLayers[k]);row.classList.add("off");}
-      else{map.addLayer(bbLayers[k]);row.classList.remove("off");}};
+      else{build(k);map.addLayer(bbLayers[k]);row.classList.remove("off");}};
     list.appendChild(row);}
 }
 const subLayer=L.layerGroup(), plantLayer=L.layerGroup();
 function drawGridAssets(){
   subLayer.clearLayers(); plantLayer.clearLayers();
-  for(const s of PL_SUBS){
-    const kv=parseInt(String(s.voltage).split(";")[0])||0;
-    L.circleMarker([s.lat,s.lon],{radius:4,color:"#fb923c",fillColor:"#7c2d12",
-      fillOpacity:.95,weight:1.5})
-      .bindPopup(`<b>⚡ ${esc(s.name)||"substation"}</b><br>
-        ${s.voltage?esc(String(s.voltage).replace(/000$/,""))+" kV · ":""}substation
-        ${s.operator?"<br>"+esc(s.operator):""}
-        <br><span style="color:#8a90a2;font-size:11px">OSM ${s.id}</span>`)
-      .addTo(subLayer);}
-  for(const p of PL_PLANTS){
-    L.circleMarker([p.lat,p.lon],{radius:6,color:"#a78bfa",fillColor:"#4c1d95",
-      fillOpacity:.95,weight:2})
-      .bindPopup(`<b>🏭 ${esc(p.name)||"power plant"}</b><br>
-        ${esc(p.source)||"?"} ${p.output?"· "+esc(p.output):""}
-        ${p.operator?"<br>"+esc(p.operator):""}
-        <br><span style="color:#8a90a2;font-size:11px">generation near a DC site —
-        proximity to supply is often WHY the site was chosen</span>`)
-      .addTo(plantLayer);}
   const list=document.getElementById("sitelist");
+  let subsBuilt=false, plantsBuilt=false;
+  const buildSubs=()=>{ if(subsBuilt) return; subsBuilt=true;
+    for(const s of PL_SUBS){
+      const kv=parseInt(String(s.voltage).split(";")[0])||0;
+      L.circleMarker([s.lat,s.lon],{radius:4,color:"#fb923c",fillColor:"#7c2d12",
+        fillOpacity:.95,weight:1.5})
+        .bindPopup(`<b>⚡ ${esc(s.name)||"substation"}</b><br>
+          ${s.voltage?esc(String(s.voltage).replace(/000$/,""))+" kV · ":""}substation
+          ${s.operator?"<br>"+esc(s.operator):""}`)
+        .addTo(subLayer);}};
+  const buildPlants=()=>{ if(plantsBuilt) return; plantsBuilt=true;
+    for(const p of PL_PLANTS){
+      L.circleMarker([p.lat,p.lon],{radius:6,color:"#a78bfa",fillColor:"#4c1d95",
+        fillOpacity:.95,weight:2})
+        .bindPopup(`<b>🏭 ${esc(p.name)||"power plant"}</b><br>
+          ${esc(p.source)||"?"} ${p.output?"· "+esc(p.output):""}
+          ${p.operator?"<br>"+esc(p.operator):""}
+          <br><span style="color:#8a90a2;font-size:11px">generation near a DC site —
+          proximity to supply is often WHY the site was chosen</span>`)
+        .addTo(plantLayer);}};
   if(PL_SUBS.length){
     const row=document.createElement("div"); row.className="row off";
     row.innerHTML=`<span class="dot" style="background:#fb923c"></span>
-      <span>Substations near sites (OSM)</span><span class="cnt">${PL_SUBS.length}</span>`;
+      <span>Substations (OSM)</span><span class="cnt">${PL_SUBS.length}</span>`;
     row.onclick=()=>{if(map.hasLayer(subLayer)){map.removeLayer(subLayer);row.classList.add("off");}
-      else{map.addLayer(subLayer);row.classList.remove("off");}};
+      else{buildSubs();map.addLayer(subLayer);row.classList.remove("off");}};
     list.appendChild(row);}
   if(PL_PLANTS.length){
-    const row=document.createElement("div"); row.className="row";
+    const row=document.createElement("div"); row.className="row off";
     row.innerHTML=`<span class="dot" style="background:#a78bfa"></span>
-      <span>Power plants near sites (OSM)</span><span class="cnt">${PL_PLANTS.length}</span>`;
-    map.addLayer(plantLayer);
+      <span>Power plants (OSM)</span><span class="cnt">${PL_PLANTS.length}</span>`;
     row.onclick=()=>{if(map.hasLayer(plantLayer)){map.removeLayer(plantLayer);row.classList.add("off");}
-      else{map.addLayer(plantLayer);row.classList.remove("off");}};
+      else{buildPlants();map.addLayer(plantLayer);row.classList.remove("off");}};
     list.appendChild(row);}
 }
 function drawPlines(){
