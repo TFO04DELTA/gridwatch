@@ -936,12 +936,14 @@ class PPLOmap(Kubra):
         out = list(seen.values())
         # if the deepest zoom STILL had clusters, surface aggregate customer
         # counts so a big storm cluster isn't dropped to zero
-        if cluster_seen and not out:
-            print(f"[!] [{self.region['name']}] all cells still clustered at "
-                  f"zoom {zmax}; reporting cluster centroids as points")
+        if cluster_seen:
+            print(f"[i] [{self.region['name']}] residual clusters at "
+                  f"zoom {zmax}; appending centroids so customers aren't lost")
             try:
                 r = self.s.get(f"{self.API}/{zmax}?opco={opco}", timeout=30)
                 for it in r.json():
+                    if it.get("id"):      # real points already collected
+                        continue
                     lat, lon = float(it["a"]), float(it["o"])
                     if bbox and not (bbox["south"] <= lat <= bbox["north"]
                                      and bbox["west"] <= lon <= bbox["east"]):
@@ -1448,6 +1450,62 @@ def _regions(cfg):
     return regs
 
 
+def fetch_backbone(cfg, regions, out_path):
+    """Weekly pull of the >=345kV transmission backbone across every polled
+    region bbox (OSM Overpass). Corridor-scale layer: the spine data centers
+    site themselves along. Geometry decimated, deduped, size-guarded."""
+    import requests as rq
+    VOLT = "345000|380000|400000|500000|765000"
+    lines, seen = [], set()
+    for reg in regions:
+        b = reg.get("bbox")
+        if not b:
+            continue
+        q = (f'[out:json][timeout:120];way["power"="line"]'
+             f'["voltage"~"{VOLT}"]({b["south"]},{b["west"]},'
+             f'{b["north"]},{b["east"]});out geom tags;')
+        try:
+            r = rq.post("https://overpass-api.de/api/interpreter",
+                        data={"data": q}, timeout=150,
+                        headers={"User-Agent": cfg.get("nws_user_agent",
+                                                       "GRIDWATCH")})
+            r.raise_for_status()
+            els = r.json().get("elements", [])
+        except Exception as e:
+            print(f"[!] backbone {reg['name']} failed (non-fatal): {e}")
+            continue
+        for el in els:
+            if el.get("id") in seen:
+                continue
+            seen.add(el.get("id"))
+            t = el.get("tags", {}) or {}
+            pts = [[round(p["lat"], 4), round(p["lon"], 4)]
+                   for p in el.get("geometry", [])]
+            geom = pts[::2] if len(pts) >= 4 else pts
+            if len(geom) < 2:
+                continue
+            v = 0
+            for tok in str(t.get("voltage", "")).split(";"):
+                try:
+                    v = max(v, int(tok))
+                except ValueError:
+                    pass
+            lines.append({"v": v, "name": t.get("name", ""),
+                          "operator": t.get("operator", ""), "geom": geom})
+        time.sleep(2)
+    payload = json.dumps({"generated_at": _now_iso(), "min_voltage": 345000,
+                          "lines": lines}, separators=(",", ":"))
+    if len(payload) > 9_000_000:
+        print(f"[!] backbone {len(payload)/1e6:.1f}MB > 9MB guard — not "
+              f"written; raise the voltage floor")
+        return False
+    with open(out_path, "w") as f:
+        f.write(payload)
+    print(f"[i] backbone: {len(lines)} HV segments "
+          f"({len(payload)/1e6:.1f}MB) -> {out_path}")
+    return bool(lines)
+
+
 def _fetch_region(cfg, region):
     try:
         outages = make_provider(cfg, region).fetch_outages()
@@ -1577,6 +1635,9 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
         pl_path = os.path.join(emit_dir, "powerlines.json")
         if _auto_layer_stale(pl_path):
             fetch_powerlines(cfg, sites, pl_path)
+        bb_path = os.path.join(emit_dir, "backbone.json")
+        if _auto_layer_stale(bb_path):
+            fetch_backbone(cfg, regions, bb_path)
         _maybe_alert(emit_dir, emitted, cfg)
     print("[i] Snapshot classification:")
     for cls, n in sorted(counts.items(), key=lambda x: -x[1]):
