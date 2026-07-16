@@ -221,10 +221,10 @@
       "lat": 41.093,
       "lon": -76.147,
       "status": "construction",
-      "territory": "PPL \u2014 NOT FirstEnergy (context site)",
+      "territory": "PPL Electric",
       "verify": true,
-      "source": "Anchor of Amazon's $20B PA commitment (Shapiro, Jun 2025). AWS bought Talen's DC + ~1,200 acres; 15 buildings planned. NOTE: co-located at Susquehanna Steam Electric Station; PPL territory, so its outages will NOT appear on the FE map. Kept as corridor context.",
-      "coverage": "context-only (utility not polled)"
+      "source": "Anchor of Amazon's $20B PA commitment (Shapiro, Jun 2025). AWS bought Talen's DC + ~1,200 acres; 15 buildings planned. Co-located at Susquehanna Steam Electric Station. NOW POLLED via PA-PPL.",
+      "coverage": "polled"
     },
     {
       "name": "AWS Falls Twp / Keystone Trade Center (Bucks Co.)",
@@ -243,7 +243,7 @@
       "lat": 40.83,
       "lon": -76.03,
       "status": "announced",
-      "territory": "Met-Ed / PPL border \u2014 VERIFY",
+      "territory": "Met-Ed / PPL border \u2014 VERIFY which side (both now polled)",
       "verify": true,
       "source": "DCD May 2026: 2.5M sq ft, 1,600 acres rezoned 'Special Data Center Overlay District', 15 buildings over a decade; Banks Twp also eyed. Territory must be confirmed \u2014 if Met-Ed, this is a live FE test site.",
       "coverage": "polled"
@@ -254,7 +254,7 @@
       "lat": 41.07,
       "lon": -76.21,
       "status": "announced",
-      "territory": "PPL/Penelec border \u2014 VERIFY",
+      "territory": "PPL / Penelec border \u2014 VERIFY (both now polled)",
       "verify": true,
       "source": "Fox56 Mar 2026: major land deal closed, township supervisors approved; construction could begin fall 2026. Watch for groundbreaking \u2014 a clean before/after natural experiment if it lands in Penelec.",
       "coverage": "polled"
