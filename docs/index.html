@@ -197,6 +197,8 @@
     </div>
 
     <div id="tab-burden" style="display:none">
+      <div class="card"><h2>PJM zonal prices — the flows layer</h2>
+        <div id="flowscard">loading…</div></div>
       <div class="card"><h2>Watch list — decisions & milestones</h2>
         <div id="watchlist" class="meta">loading…</div></div>
       <div class="card"><h2>The interstate cost shift (PJM)</h2>
@@ -443,7 +445,28 @@ function drawInfra(){
   document.getElementById("sitelist").appendChild(row);
 }
 
-let PL_SUBS=[],PL_PLANTS=[],BACKBONE=[];
+let PL_SUBS=[],PL_PLANTS=[],BACKBONE=[],FLOWS=null;
+function renderFlows(){
+  const el=document.getElementById("flowscard"); if(!el) return;
+  if(!FLOWS||!(FLOWS.zones||[]).length){
+    el.innerHTML=`<span class="meta">PJM zonal price data appears once the free
+      Data Miner 2 key (repo secret PJM_API_KEY) is configured. This is the layer
+      where cross-state load shows up in dollars: zonal LMPs + congestion.</span>`;
+    return;}
+  const oh=new Set(["ATSI","AEP","DAY","DEOK"]);
+  let rows=FLOWS.zones.map(z=>`<tr${oh.has(z.zone)?' style="color:var(--accent)"':
+    z.zone==="DOM"?' style="color:var(--red)"':''}>
+    <td>${esc(z.zone)}</td><td class="n">$${z.avg_lmp}</td>
+    <td class="n">$${z.avg_congestion}</td></tr>`).join("");
+  el.innerHTML=`<div class="meta">day-ahead zonal LMP averages, ${esc(FLOWS.day)}
+    ${FLOWS.dom_minus_atsi!=null?`· <b>DOM − ATSI spread: $${FLOWS.dom_minus_atsi}/MWh</b>
+    (Dominion = Data Center Alley zone; Ohio zones highlighted)`:""}</div>
+    <table><thead><tr><th>zone</th><th class="n">avg LMP</th>
+    <th class="n">congestion</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="caveat">Electrons don't carry state names — prices do. Persistent
+    DOM premiums + congestion are how NoVA load pulls on the shared grid.
+    Full topology is CEII-restricted; map layers are OSM reconstructions.</div>`;
+}
 const bbLayers={hi:L.layerGroup(),mid:L.layerGroup(),lo:L.layerGroup()};
 function drawBackbone(){
   for(const k in bbLayers) bbLayers[k].clearLayers();
@@ -705,6 +728,12 @@ async function boot(){
   PLINES=plines.lines||[];
   PL_SUBS=plines.substations||[]; PL_PLANTS=plines.plants||[];
   try{BACKBONE=(await fetch("data/backbone.json").then(r=>r.json())).lines||[];}catch(e){BACKBONE=[];}
+  try{const ga=await fetch("data/grid_assets.json").then(r=>r.json());
+    if((ga.substations||[]).length){
+      PL_SUBS=ga.substations.map(s=>({id:"",name:s.n,operator:s.o,voltage:s.v?String(s.v):"",lat:s.lat,lon:s.lon}));
+      PL_PLANTS=ga.plants.map(p=>({id:"",name:p.n,operator:p.o,source:p.src,output:p.out,lat:p.lat,lon:p.lon}));
+    }}catch(e){}
+  try{FLOWS=await fetch("data/pjm_flows.json").then(r=>r.json());}catch(e){FLOWS=null;}
   const fl=(latest.feeds||[]).filter(f=>!f.error).length;
   if(fl) document.getElementById("tagline").innerHTML=
     `outages &times; weather &times; data center proximity — ${fl} live utility feeds, Midwest&rarr;Atlantic`;
@@ -734,7 +763,7 @@ async function boot(){
     .map(d=>`<option value="${d.date}">${d.date} (${d.unique??d.records})</option>`).join("")
     ||"<option>— none —</option>";
   document.getElementById("loadday").onclick=()=>loadHistDay(document.getElementById("daysel").value);
-  timeline();sparkline();renderStates();renderClassbar();renderWatch();
+  timeline();sparkline();renderStates();renderClassbar();renderWatch();renderFlows();
   loadEvidence(30);
   const rb=document.getElementById("refetch"); if(rb) rb.onclick=refetchNow;
   try{ renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json())); }catch(e){}
