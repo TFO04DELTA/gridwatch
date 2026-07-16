@@ -99,6 +99,10 @@
       <div class="card"><h2>Regions</h2><div class="chips" id="regchips"></div>
         <div style="margin-top:8px"><span class="chip" id="reg-all">all</span>
         <span class="chip" id="reg-none">none</span></div></div>
+      <div class="card"><h2>Outage mix</h2><div id="classbar" class="meta">—</div></div>
+      <div class="card"><h2>By state</h2>
+        <table id="statetable"><thead><tr><th>state</th><th class="n">out</th>
+        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
       <div class="card"><h2>Feed status</h2>
         <table id="feedtable"><thead><tr><th>feed</th><th class="n">out</th>
         <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
@@ -125,6 +129,13 @@
     </div>
 
     <div id="tab-history" style="display:none">
+      <div class="card"><h2>Customers affected — last 14 days</h2>
+        <svg id="spark" width="100%" height="56" preserveAspectRatio="none"></svg>
+        <div class="meta" id="sparkmeta"></div></div>
+      <div class="card"><h2>Reliability by region</h2>
+        <table id="reliatable"><thead><tr><th>region</th><th class="n">now</th>
+        <th class="n">fair%</th><th class="n">avg fix</th><th class="n">momentary%</th></tr></thead>
+        <tbody></tbody></table></div>
       <div class="card"><h2>Restoration & momentary events (7d)</h2>
         <div class="kpis" style="margin-bottom:8px">
           <div class="kpi"><div class="lbl">network avg close-out</div>
@@ -186,6 +197,8 @@
     </div>
 
     <div id="tab-burden" style="display:none">
+      <div class="card"><h2>Watch list — decisions & milestones</h2>
+        <div id="watchlist" class="meta">loading…</div></div>
       <div class="card"><h2>The interstate cost shift (PJM)</h2>
         <div class="meta">Ohio shares one capacity market with Northern
         Virginia's Data Center Alley. Electrons aren't tagged — the burden is
@@ -301,6 +314,37 @@ function regionChips(){
 }
 const liveLabel=()=>`${LATEST.count} outages · updated ${LATEST.generated_at} UTC`;
 
+const STATE_OF={OH:"OH","OH-AEP":"OH","OH-AES":"OH","OH-DUKE":"OH","PA-NY":"PA",
+ PECO:"PA",NJ:"NJ","NJ-PSEG":"NJ","NJ-ACE":"NJ","MD-WV":"MD/WV",BGE:"MD",
+ "DC-PEPCO":"DC","DE-DELMARVA":"DE","NY-NGRID":"NY","NY-CENHUD":"NY","IN-DUKE":"IN",
+ "VA-DOM":"VA","VA-NOVEC":"VA","VAWV-APCO":"VA/WV","NC-DEC":"NC","NC-DEP":"NC",
+ "SC-DOM":"SC","MA-NGRID":"MA","NE-EVERSOURCE":"CT/MA/NH"};
+function renderStates(){
+  const tb=document.querySelector("#statetable tbody"); if(!tb) return;
+  const agg={};
+  for(const f of (LATEST.feeds||[])){
+    if(f.error) continue;
+    const st=STATE_OF[f.name]||f.name;
+    (agg[st]=agg[st]||{o:0,c:0}); agg[st].o+=f.outages; agg[st].c+=f.customers||0;
+  }
+  tb.innerHTML="";
+  Object.entries(agg).sort((a,b)=>b[1].c-a[1].c).forEach(([st,v])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(st)}</td><td class="n">${v.o}</td><td class="n">${fmt(v.c)}</td>`;
+    tb.appendChild(tr);});
+}
+function renderClassbar(){
+  const el=document.getElementById("classbar"); if(!el) return;
+  const os=LATEST.outages||[]; if(!os.length){el.textContent="—";return;}
+  const n=os.length;
+  const w=os.filter(o=>o.weather_flag).length;
+  const d=os.filter(o=>o.dc_flag).length;
+  const ctx=os.filter(o=>String(o.classification||"").startsWith("NEAR OPERATING")).length;
+  const fair=n-w;
+  const pc=x=>(100*x/n).toFixed(0)+"%";
+  el.innerHTML=`<b>${pc(w)}</b> weather-likely · <b>${pc(fair)}</b> fair-weather
+    · <b>${d}</b> near active DC sites · <b>${ctx}</b> near operating DCs (context)`;
+}
 function renderFeeds(){
   const tb=document.querySelector("#feedtable tbody"); if(!tb) return;
   tb.innerHTML="";
@@ -365,9 +409,25 @@ function drawAuto(){
     else{map.addLayer(autoLayer);row.classList.remove("off");}};
   document.getElementById("sitelist").appendChild(row);
 }
+function renderWatch(){
+  const el=document.getElementById("watchlist"); if(!el) return;
+  const items=INFRA.filter(p=>p.type==="docket-watch");
+  if(!items.length){el.textContent="no tracked decisions yet";return;}
+  el.innerHTML=items.sort((a,b)=>String(a.decision_date).localeCompare(String(b.decision_date)))
+    .map(p=>`<div style="margin:6px 0"><b>${esc(p.decision_date||"TBD")}</b> — ${esc(p.name)}
+      <br><span class="meta">${esc(p.source)}</span></div>`).join("");
+}
 function drawInfra(){
   infraLayer.clearLayers();
-  for(const p of INFRA){ if(!p.lat) continue;
+  for(const p of INFRA){
+    if(p.path&&p.path.length>1){
+      L.polyline(p.path,{color:"#f97316",weight:3,dashArray:"10 8",opacity:.8})
+        .bindPopup(`<b>⚡ ${esc(p.name)}</b><br>${esc(p.type)} — ${esc(p.status)}
+          <br><span style="color:#8a90a2;font-size:11px">${esc(p.source)}</span>`)
+        .addTo(infraLayer);
+      continue;
+    }
+    if(!p.lat) continue;
     const col=p.status==="complete"?"#fbbf24":"#f97316";
     L.circleMarker([p.lat,p.lon],{radius:6,color:col,fillColor:col,fillOpacity:.9,weight:2})
       .bindPopup(`<b>⚡ ${esc(p.name)}</b><br>${esc(p.type)} — ${esc(p.status)}<br>
@@ -512,6 +572,17 @@ async function loadEvidence(windowDays){
       <td>${esc(p.status)}</td><td class="n">${p.f}</td><td class="n">${p.t}</td>`;
     tb.appendChild(tr);});
 }
+function sparkline(){
+  const svg=document.getElementById("spark"); if(!svg||!INDEX.days) return;
+  const days=INDEX.days.slice(-14); if(!days.length) return;
+  const W=600,H=56,max=Math.max(...days.map(d=>d.customers||0),1);
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const pts=days.map((d,i)=>`${(i/(days.length-1||1))*W},${H-4-((d.customers||0)/max)*(H-10)}`).join(" ");
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  const last=days[days.length-1];
+  document.getElementById("sparkmeta").textContent=
+    `peak ${fmt(max)} · latest day ${fmt(last.customers||0)} customers across ${last.unique} outages`;
+}
 function timeline(){
   const el=document.getElementById("tl"); el.innerHTML="";
   const days=(INDEX.days||[]).slice(-45);
@@ -580,7 +651,7 @@ async function refetchNow(){
   try{
     const latest=await fetch("data/latest.json?t="+Date.now()).then(r=>r.json());
     LATEST=latest;
-    renderFeeds();
+    renderFeeds();renderStates();renderClassbar();
     if(currentView==="live")
       plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
     try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());timeline();}catch(e){}
@@ -589,14 +660,7 @@ async function refetchNow(){
   if(b){b.disabled=false;b.textContent="↻ refresh";}
 }
 async function refresh(){
-  try{
-    const latest=await fetch("data/latest.json?t="+Date.now()).then(r=>r.json());
-    if(!LATEST||latest.generated_at!==LATEST.generated_at){
-      LATEST=latest;
-      if(currentView==="live")
-        plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
-    }
-  }catch(e){}
+  await refetchNow();          // full re-render: map, feeds, durations, timeline
   setTimeout(refresh,REFRESH_MS);
 }
 
@@ -640,7 +704,7 @@ async function boot(){
     .map(d=>`<option value="${d.date}">${d.date} (${d.unique??d.records})</option>`).join("")
     ||"<option>— none —</option>";
   document.getElementById("loadday").onclick=()=>loadHistDay(document.getElementById("daysel").value);
-  timeline();
+  timeline();sparkline();renderStates();renderClassbar();renderWatch();
   loadEvidence(30);
   const rb=document.getElementById("refetch"); if(rb) rb.onclick=refetchNow;
   try{ renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json())); }catch(e){}
@@ -670,6 +734,24 @@ function renderDurations(D){
   const lg=(D.longest||[])[0];
   if(lg) document.getElementById("dur-max").textContent=
     (lg.minutes>=120?(lg.minutes/60).toFixed(1)+"h":lg.minutes+"m");
+  const rt=document.querySelector("#reliatable tbody");
+  if(rt){
+    rt.innerHTML="";
+    const byReg={};
+    for(const o of (LATEST.outages||[])){
+      (byReg[o.region]=byReg[o.region]||{n:0,f:0});
+      byReg[o.region].n++; if(!o.weather_flag) byReg[o.region].f++;
+    }
+    const regs=new Set([...Object.keys(byReg),...Object.keys(D.regions||{})]);
+    [...regs].sort().forEach(r=>{
+      const b=byReg[r]||{n:0,f:0}, d=(D.regions||{})[r];
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${esc(r)}</td><td class="n">${b.n}</td>
+        <td class="n">${b.n?(100*b.f/b.n).toFixed(0)+"%":"—"}</td>
+        <td class="n">${d?Math.round(d.avg_min)+"m":"—"}</td>
+        <td class="n">${d?d.momentary_pct+"%":"—"}</td>`;
+      rt.appendChild(tr);});
+  }
   const box=document.getElementById("durnote");
   if((D.longest||[]).length)
     box.innerHTML=(D.note||"")+"<br><b>Longest resolved:</b> "+
