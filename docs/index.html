@@ -77,7 +77,7 @@
   <div id="side">
     <header><h1>GRIDWATCH</h1><span class="pulse" title="auto-refreshing"></span>
       <span class="meta" id="refresh">—</span>
-      <button id="refetch" title="re-fetch the latest published data (does not re-scrape utilities)"
+      <button id="refetch" onclick="refetchNow()" title="re-fetch the latest published data (does not re-scrape utilities)"
         style="margin-left:auto;padding:3px 10px;font-size:12px">↻ refresh</button></header>
     <div class="sub" id="tagline">outages &times; weather &times; data center proximity</div>
 
@@ -197,8 +197,9 @@
     </div>
 
     <div id="tab-burden" style="display:none">
-      <div class="card"><h2>PJM zonal prices — the flows layer</h2>
-        <div id="flowscard">loading…</div></div>
+      <div class="card" id="flowswrap" style="display:none">
+        <h2>PJM zonal prices — the flows layer</h2>
+        <div id="flowscard"></div></div>
       <div class="card"><h2>Watch list — decisions & milestones</h2>
         <div id="watchlist" class="meta">loading…</div></div>
       <div class="card"><h2>The interstate cost shift (PJM)</h2>
@@ -446,12 +447,10 @@ function drawInfra(){
 
 let PL_SUBS=[],PL_PLANTS=[],BACKBONE=[],FLOWS=null;
 function renderFlows(){
-  const el=document.getElementById("flowscard"); if(!el) return;
-  if(!FLOWS||!(FLOWS.zones||[]).length){
-    el.innerHTML=`<span class="meta">PJM zonal price data appears once the free
-      Data Miner 2 key (repo secret PJM_API_KEY) is configured. This is the layer
-      where cross-state load shows up in dollars: zonal LMPs + congestion.</span>`;
-    return;}
+  const el=document.getElementById("flowscard"), wrap=document.getElementById("flowswrap");
+  if(!el||!wrap) return;
+  if(!FLOWS||!(FLOWS.zones||[]).length){ wrap.style.display="none"; return; }
+  wrap.style.display="";
   const oh=new Set(["ATSI","AEP","DAY","DEOK"]);
   let rows=FLOWS.zones.map(z=>`<tr${oh.has(z.zone)?' style="color:var(--accent)"':
     z.zone==="DOM"?' style="color:var(--red)"':''}>
@@ -701,16 +700,20 @@ setInterval(()=>{
 },1000);
 async function refetchNow(){
   const b=document.getElementById("refetch"); if(b){b.disabled=true;b.textContent="…";}
+  const prev=LATEST&&LATEST.generated_at;
   try{
     const latest=await fetch("data/latest.json?t="+Date.now()).then(r=>r.json());
+    const changed=latest.generated_at!==prev;
     LATEST=latest;
+    if(b){b.textContent=changed?"✓ updated":"✓ no new poll yet";
+      setTimeout(()=>{b.textContent="↻ refresh";b.disabled=false;},2200);}
     renderFeeds();renderStates();renderClassbar();
     if(currentView==="live")
       plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
     try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());timeline();}catch(e){}
     try{renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json()));}catch(e){}
   }catch(e){}
-  if(b){b.disabled=false;b.textContent="↻ refresh";}
+  if(b&&b.textContent==="…"){b.disabled=false;b.textContent="↻ refresh";}
 }
 async function refresh(){
   await refetchNow();          // full re-render: map, feeds, durations, timeline
