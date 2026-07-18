@@ -103,6 +103,9 @@
       <div class="card"><h2>By state</h2>
         <table id="statetable"><thead><tr><th>state</th><th class="n">out</th>
         <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
+      <div class="card" id="strainwrap" style="display:none">
+        <h2>Grid strain — demand vs forecast</h2>
+        <div id="straincard"></div></div>
       <div class="card"><h2>Feed status</h2>
         <table id="feedtable"><thead><tr><th>feed</th><th class="n">out</th>
         <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
@@ -374,6 +377,18 @@ function renderFeeds(){
 
 
 function isContext(s){return String(s.coverage||"").startsWith("context");}
+const radarLayer=L.tileLayer(
+  "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png",
+  {opacity:.55,attribution:"NEXRAD via Iowa State Mesonet"});
+function drawRadar(){
+  const list=document.getElementById("sitelist"); if(!list) return;
+  const row=document.createElement("div"); row.className="row off";
+  row.innerHTML=`<span class="dot" style="background:#38bdf8"></span>
+    <span>Live weather radar (NEXRAD)</span><span class="cnt">live</span>`;
+  row.onclick=()=>{if(map.hasLayer(radarLayer)){map.removeLayer(radarLayer);row.classList.add("off");}
+    else{map.addLayer(radarLayer);row.classList.remove("off");}};
+  list.appendChild(row);
+}
 function siteDeepLink(){
   const m=location.hash.match(/site=([^&]+)/); if(!m) return;
   const q=decodeURIComponent(m[1]).toLowerCase();
@@ -486,7 +501,27 @@ function renderNYFlows(){
     <div class="caveat">NYISO public data — freely redistributable, unlike PJM's.
     The persistent spread is the price signal pulling load upstate.</div>`;
 }
-let EIAD=null;
+let EIAD=null,STRAIN=null;
+function renderStrain(){
+  const el=document.getElementById("straincard"), wrap=document.getElementById("strainwrap");
+  if(!el||!wrap) return;
+  if(!STRAIN||!(STRAIN.bas||[]).length){wrap.style.display="none";return;}
+  wrap.style.display="";
+  const rows=STRAIN.bas.map(b=>{
+    const hot=b.max48_pct>=100, warm=b.max48_pct>=98;
+    const col=hot?"var(--red)":warm?"var(--amber)":"var(--dim)";
+    return `<tr><td>${esc(b.ba)}</td>
+      <td class="n" style="color:${col}"><b>${b.max48_pct}%</b></td>
+      <td class="n">${b.hours_ge98}h</td>
+      <td class="n">${b.latest_pct}%</td></tr>`;}).join("");
+  el.innerHTML=`<div class="meta">Actual demand as % of day-ahead forecast (EIA-930,
+    public domain). Sustained ≥98% (amber) or over-forecast (red) is the condition
+    under which brownouts and conservation appeals happen — true voltage-sag data
+    is utility-internal and published nowhere. 48h window.</div>
+    <table><thead><tr><th>grid</th><th class="n">48h peak</th>
+    <th class="n">hrs ≥98%</th><th class="n">latest</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
 function renderEia(){
   const el=document.getElementById("eiacard"), wrap=document.getElementById("eiawrap");
   if(!el||!wrap) return;
@@ -796,12 +831,13 @@ async function boot(){
     }}catch(e){}
   try{FLOWS=await fetch("data/pjm_flows.json").then(r=>r.json());}catch(e){FLOWS=null;}
   try{EIAD=await fetch("data/eia_demand.json").then(r=>r.json());}catch(e){EIAD=null;}
+  try{STRAIN=await fetch("data/eia_strain.json").then(r=>r.json());}catch(e){STRAIN=null;}
   try{NYFLOWS=await fetch("data/nyiso_flows.json?t="+Date.now()).then(r=>r.json());}catch(e){NYFLOWS=null;}
   const fl=(latest.feeds||[]).filter(f=>!f.error).length;
   if(fl) document.getElementById("tagline").innerHTML=
     `outages &times; weather &times; data center proximity — ${fl} live utility feeds, Midwest&rarr;Atlantic`;
   RADIUS=latest.dc_radius_km||8;
-  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();drawBackbone();regionChips();
+  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();drawBackbone();drawRadar();regionChips();
   siteDeepLink();window.addEventListener("hashchange",siteDeepLink);
   renderFeeds();
   const sf=document.getElementById("sitefilter");
@@ -827,7 +863,7 @@ async function boot(){
     .map(d=>`<option value="${d.date}">${d.date} (${d.unique??d.records})</option>`).join("")
     ||"<option>— none —</option>";
   document.getElementById("loadday").onclick=()=>loadHistDay(document.getElementById("daysel").value);
-  timeline();sparkline();renderStates();renderClassbar();renderWatch();renderFlows();renderEia();renderNYFlows();
+  timeline();sparkline();renderStates();renderClassbar();renderWatch();renderFlows();renderEia();renderStrain();renderNYFlows();
   loadEvidence(30);
   const rb=document.getElementById("refetch"); if(rb) rb.onclick=refetchNow;
   try{ renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json())); }catch(e){}
