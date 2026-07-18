@@ -330,6 +330,45 @@
         "east": -74.7,
         "north": 41.75
       }
+    },
+    {
+      "name": "KY-LGE",
+      "provider": "pplomap",
+      "opco": "LGE",
+      "entry": "https://lge-ku.com/storm",
+      "_note": "Louisville Gas & Electric via PPL OMAP",
+      "bbox": {
+        "west": -86.2,
+        "south": 37.6,
+        "east": -85.1,
+        "north": 38.65
+      }
+    },
+    {
+      "name": "KY-KU",
+      "provider": "pplomap",
+      "opco": "KU",
+      "entry": "https://lge-ku.com/storm",
+      "_note": "Kentucky Utilities (Lexington + central/east KY). 'KY' opco skipped: likely combined alias of LGE+KU \u2014 adding it would double-count.",
+      "bbox": {
+        "west": -86.6,
+        "south": 36.5,
+        "east": -82.3,
+        "north": 39.1
+      }
+    },
+    {
+      "name": "RI-RIE",
+      "provider": "pplomap",
+      "opco": "RI",
+      "entry": "https://www.rienergy.com/outages",
+      "_note": "Rhode Island Energy via PPL OMAP",
+      "bbox": {
+        "west": -71.95,
+        "south": 41.1,
+        "east": -71.05,
+        "north": 42.05
+      }
     }
   ],
   "tile_workers": 8,
