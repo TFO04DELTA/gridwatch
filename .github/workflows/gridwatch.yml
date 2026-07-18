@@ -1,7 +1,7 @@
 name: gridwatch-poll
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 permissions:
   contents: write
@@ -24,6 +24,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DUKE_BASIC_TOKEN: ${{ secrets.DUKE_BASIC_TOKEN }}
           PJM_API_KEY: ${{ secrets.PJM_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
         run: python gridwatch.py poll --emit docs/data --no-db
       - name: Commit snapshot
         run: |
