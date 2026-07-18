@@ -377,17 +377,62 @@ function renderFeeds(){
 
 
 function isContext(s){return String(s.coverage||"").startsWith("context");}
-const radarLayer=L.tileLayer(
+const radarFallback=L.tileLayer(
   "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png",
-  {opacity:.55,attribution:"NEXRAD via Iowa State Mesonet"});
+  {opacity:.55,attribution:"NEXRAD / Iowa State Mesonet"});
+let radarOn=false,radarFrames=[],radarLayers={},radarIdx=0,radarTimer=null,radarBtn=null,radarClock=null;
+async function radarStart(){
+  try{
+    const j=await fetch("https://api.rainviewer.com/public/weather-maps.json").then(r=>r.json());
+    radarFrames=(j.radar&&j.radar.past||[]).slice(-8);
+    if(!radarFrames.length) throw 0;
+    radarIdx=radarFrames.length-1;
+    radarTick(); radarTimer=setInterval(radarTick,700);
+  }catch(e){ map.addLayer(radarFallback); if(radarClock) radarClock.textContent="live"; }
+}
+function radarTick(){
+  const f=radarFrames[radarIdx];
+  if(!radarLayers[f.time]){
+    radarLayers[f.time]=L.tileLayer(
+      "https://tilecache.rainviewer.com"+f.path+"/256/{z}/{x}/{y}/2/1_1.png",
+      {opacity:0,attribution:"RainViewer"});
+  }
+  for(const t in radarLayers){
+    if(!map.hasLayer(radarLayers[t])) map.addLayer(radarLayers[t]);
+    radarLayers[t].setOpacity(+t===f.time?0.6:0);
+  }
+  if(radarClock){
+    const d=new Date(f.time*1000);
+    radarClock.textContent=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  }
+  radarIdx=(radarIdx+1)%radarFrames.length;
+}
+function radarStop(){
+  if(radarTimer){clearInterval(radarTimer);radarTimer=null;}
+  for(const t in radarLayers) map.removeLayer(radarLayers[t]);
+  radarLayers={}; radarFrames=[];
+  if(map.hasLayer(radarFallback)) map.removeLayer(radarFallback);
+  if(radarClock) radarClock.textContent="";
+}
 function drawRadar(){
-  const list=document.getElementById("sitelist"); if(!list) return;
-  const row=document.createElement("div"); row.className="row off";
-  row.innerHTML=`<span class="dot" style="background:#38bdf8"></span>
-    <span>Live weather radar (NEXRAD)</span><span class="cnt">live</span>`;
-  row.onclick=()=>{if(map.hasLayer(radarLayer)){map.removeLayer(radarLayer);row.classList.add("off");}
-    else{map.addLayer(radarLayer);row.classList.remove("off");}};
-  list.appendChild(row);
+  const C=L.control?L.Control:null;
+  const div=document.createElement("div");
+  div.style.cssText="position:absolute;top:12px;right:12px;z-index:1000;display:flex;gap:6px;align-items:center";
+  div.innerHTML=`<button id="radarbtn" style="padding:5px 12px;border-radius:18px;font-size:12px;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);cursor:pointer">
+    🌧 radar</button><span id="radarclock" class="meta" style="min-width:38px"></span>`;
+  const mapEl=document.getElementById("map");
+  if(mapEl&&mapEl.parentElement){
+    mapEl.parentElement.style.position="relative";
+    mapEl.parentElement.appendChild(div);
+  } else document.body.appendChild(div);
+  radarBtn=div.querySelector("#radarbtn"); radarClock=div.querySelector("#radarclock");
+  radarBtn.onclick=()=>{
+    radarOn=!radarOn;
+    radarBtn.style.background=radarOn?"var(--accent)":"var(--panel)";
+    radarBtn.style.color=radarOn?"#0b0d12":"var(--text)";
+    if(radarOn) radarStart(); else radarStop();
+  };
 }
 function siteDeepLink(){
   const m=location.hash.match(/site=([^&]+)/); if(!m) return;
