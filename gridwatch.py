@@ -1,4 +1,4 @@
-=#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 GRIDWATCH — FirstEnergy (Ohio) outage collector with weather + data center
 proximity correlation.
