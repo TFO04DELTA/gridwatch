@@ -430,10 +430,10 @@
       "lat": 41.708,
       "lon": -86.44,
       "status": "construction",
-      "territory": "Indiana Michigan Power (AEP) \u2014 NOT Duke (context)",
+      "territory": "Indiana Michigan Power (AEP)",
       "verify": true,
       "source": "$11B, 1,200 acres. I&M shifting $400M+ of connection costs onto ratepayers (Citizens Action). Context-only for now \u2014 becomes testable if we ever add I&M's iFactor feed (same AEP family as OH-AEP).",
-      "coverage": "context-only (utility not polled)"
+      "coverage": "polled"
     },
     {
       "name": "Data Center Alley core (Ashburn/Loudoun Co. VA)",
@@ -566,10 +566,10 @@
       "lat": 41.0,
       "lon": -85.2,
       "status": "construction",
-      "territory": "Indiana Michigan Power (AEP) \u2014 NOT polled (context)",
+      "territory": "Indiana Michigan Power (AEP)",
       "verify": true,
       "source": "$2B campus; I&M territory. Becomes testable if I&M's iFactor feed is added (same AEP family as OH-AEP).",
-      "coverage": "context-only (utility not polled)"
+      "coverage": "polled"
     },
     {
       "name": "Sabey Indianapolis (Decatur Twp, Marion Co. IN)",
@@ -610,10 +610,66 @@
       "lat": 38.36,
       "lon": -82.73,
       "status": "announced",
-      "territory": "Kentucky Power (AEP) \u2014 NOT polled (context)",
+      "territory": "Kentucky Power (AEP)",
       "verify": true,
       "source": "Lake Mariner lessons applied to Kentucky; AEP-family feed would make it testable.",
-      "coverage": "context-only (utility not polled)"
+      "coverage": "polled"
+    },
+    {
+      "name": "Google Douglas Co. (Lithia Springs GA)",
+      "operator": "Google",
+      "lat": 33.743,
+      "lon": -84.641,
+      "status": "operating (expanding)",
+      "territory": "Georgia Power",
+      "verify": true,
+      "source": "Long-running campus west of Atlanta with announced expansion phases.",
+      "coverage": "polled"
+    },
+    {
+      "name": "Meta Newton Co. (Social Circle GA)",
+      "operator": "Meta",
+      "lat": 33.66,
+      "lon": -83.82,
+      "status": "operating (expanding)",
+      "territory": "Georgia Power",
+      "verify": true,
+      "source": "Multi-building campus east of Atlanta; continuing build-out.",
+      "coverage": "polled"
+    },
+    {
+      "name": "QTS Atlanta-Metro (Fulton Co. GA)",
+      "operator": "QTS (Blackstone)",
+      "lat": 33.79,
+      "lon": -84.41,
+      "status": "operating (expanding)",
+      "territory": "Georgia Power",
+      "verify": true,
+      "source": "One of the largest US colo campuses; on-site substation capacity.",
+      "coverage": "polled"
+    },
+    {
+      "name": "Atlanta metro hyperscale wave (contextual anchor)",
+      "operator": "multiple",
+      "lat": 33.6,
+      "lon": -84.55,
+      "status": "announced",
+      "territory": "Georgia Power \u2014 VERIFY per parcel",
+      "verify": true,
+      "powerlines": true,
+      "source": "GPC's IRP updates cite multi-GW DC pipeline; replace with named parcels as they firm up.",
+      "coverage": "polled"
+    },
+    {
+      "name": "CONTROL \u2014 Cherokee Co. GA growth corridor",
+      "operator": "n/a",
+      "lat": 34.24,
+      "lon": -84.49,
+      "status": "control",
+      "territory": "Georgia Power",
+      "verify": true,
+      "source": "Fast-growing Atlanta exurb, heavy construction, no DC campus.",
+      "coverage": "polled"
     }
   ]
 }
