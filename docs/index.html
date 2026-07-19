@@ -4,388 +4,467 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GRIDWATCH — outages × weather × data centers</title>
+<meta name="description" content="Live grid reliability instrument: 28+ utility outage feeds from Ohio to Georgia, weather-attributed, correlated with data center construction, with evidence controls and cost receipts.">
+<meta property="og:title" content="GRIDWATCH">
+<meta property="og:description" content="Does data center construction correlate with grid reliability degradation? Live instrument, honest controls, public data.">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root { --bg:#0a0d13; --panel:#11151e; --panel2:#161c29; --line:#232a3b;
-          --text:#d8dbe4; --dim:#8b91a3; --accent:#7aa2f7; --red:#ef4444;
-          --amber:#f59e0b; --blue:#3b82f6; --purple:#a855f7; --green:#34d399; }
-  * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
-              font:14px/1.5 system-ui,'Segoe UI',Roboto,sans-serif; }
-  #app { display:grid; grid-template-columns:380px 1fr; height:100%; }
-  #side { background:var(--panel); border-right:1px solid var(--line);
-          overflow-y:auto; padding:14px 16px; }
-  #map { height:100%; }
-  header { display:flex; align-items:baseline; gap:10px; }
-  h1 { font-size:17px; margin:0; letter-spacing:.1em; }
-  .pulse { width:8px; height:8px; border-radius:50%; background:var(--green);
-           box-shadow:0 0 0 0 rgba(52,211,153,.6); animation:pulse 2s infinite;
-           align-self:center; }
-  @keyframes pulse { 70%{box-shadow:0 0 0 9px rgba(52,211,153,0)} }
-  .sub { color:var(--dim); font-size:12px; margin:2px 0 10px; }
-  .kstrip { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
-  .k { background:var(--panel2); border:1px solid var(--line); border-radius:9px;
-       padding:7px 9px; }
-  .k .v { font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .k .l { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; }
-  .tabs { display:flex; gap:6px; margin-bottom:12px; }
-  .tab { flex:1; text-align:center; padding:6px 4px; border:1px solid var(--line);
-         border-radius:8px; cursor:pointer; font-size:12.5px; color:var(--dim); user-select:none; }
-  .tab.active { color:var(--text); background:var(--panel2); border-color:#3a4763; }
-  .card { background:var(--panel2); border:1px solid var(--line); border-radius:10px;
-          padding:12px; margin-bottom:12px; }
-  .card h2 { font-size:11.5px; margin:0 0 8px; color:var(--dim); letter-spacing:.1em;
-             text-transform:uppercase; }
-  .row { display:flex; align-items:center; gap:8px; margin:4px 0; cursor:pointer;
-         user-select:none; font-size:13px; }
-  .dot { width:10px; height:10px; border-radius:50%; flex:0 0 10px; }
-  .cnt { margin-left:auto; color:var(--dim); font-variant-numeric:tabular-nums; }
-  .off { opacity:.32; }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; }
-  .chip { border:1px solid var(--line); border-radius:99px; padding:3px 11px;
-          font-size:12px; cursor:pointer; color:var(--dim); user-select:none; }
-  .chip.on { color:var(--text); border-color:var(--accent); background:rgba(122,162,247,.12); }
-  .big { font-size:25px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .kpis { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
-  .kpi .lbl { font-size:11px; color:var(--dim); }
-  table { width:100%; border-collapse:collapse; font-size:12.5px; }
-  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
-  th { color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
-  td.n { text-align:right; font-variant-numeric:tabular-nums; }
-  select,button { background:var(--panel); color:var(--text); border:1px solid var(--line);
-           border-radius:8px; padding:6px 10px; font:inherit; cursor:pointer; }
-  button:hover,select:hover,.chip:hover { border-color:#3a4763; }
-  .meta { color:var(--dim); font-size:12px; }
-  .caveat { font-size:11px; color:var(--dim); margin-top:8px; }
-  #tl { display:flex; align-items:flex-end; gap:3px; height:64px; margin:8px 0 2px; }
-  #tl .bar { flex:1; display:flex; flex-direction:column-reverse; cursor:pointer;
-             border-radius:2px 2px 0 0; overflow:hidden; min-width:6px; }
-  #tl .w { background:var(--blue); } #tl .f { background:var(--amber); }
-  #tl .bar:hover { outline:1px solid var(--accent); }
-  #spark { display:flex; align-items:flex-end; gap:2px; height:42px; margin-top:6px; }
-  #spark div { flex:1; background:var(--accent); opacity:.7; border-radius:2px 2px 0 0; min-height:2px; }
-  .ratio-good { color:var(--amber); } .ratio-hot { color:var(--red); }
-  .leaflet-popup-content-wrapper,.leaflet-popup-tip { background:var(--panel2); color:var(--text); }
-  .badge { font-size:10px; border:1px solid var(--line); border-radius:99px; padding:1px 7px; color:var(--dim); }
-  @media (max-width:860px){ #app{grid-template-columns:1fr;grid-template-rows:1fr 46%;}
-    #side{order:2;border-right:none;border-top:1px solid var(--line);} }
+:root{
+  --bg:#0a0c10;--panel:#12151c;--panel2:#171b24;--line:#232936;
+  --text:#e8ebf2;--dim:#8a93a6;--accent:#f5a623;--accent2:#ff7a45;
+  --blue:#4c9aff;--red:#ff5c5c;--green:#3ddc84;--amber:#f5a623;--purple:#a78bfa;--pink:#f472b6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ---------- shell ---------- */
+header{position:sticky;top:0;z-index:1200;background:rgba(10,12,16,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:14px;padding:10px 18px;flex-wrap:wrap}
+.logo{font-weight:800;font-size:17px;letter-spacing:.5px;white-space:nowrap}
+.logo b{background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim)}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+.sdot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.sdot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+#refetch{margin-left:auto;padding:5px 14px;border-radius:16px;font-size:12px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--line);color:var(--text);transition:.15s}
+#refetch:hover{border-color:var(--accent)}
+nav{display:flex;gap:2px;padding:0 14px}
+.tab{padding:9px 16px;font-size:13px;color:var(--dim);cursor:pointer;
+  border-bottom:2px solid transparent;user-select:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+main{max-width:1400px;margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(300px,1fr);gap:14px}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--dim);font-weight:600}
+.meta{color:var(--dim);font-size:12px}
+.caveat{color:var(--dim);font-size:11px;margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+
+/* ---------- hero KPIs ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi .v{font-size:26px;font-weight:800;line-height:1.1}
+.kpi .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-top:3px}
+.kpi .d{font-size:11px;margin-left:6px;font-weight:600}
+.d.up{color:var(--red)}.d.down{color:var(--green)}.d.flat{color:var(--dim)}
+
+/* ---------- mix bar ---------- */
+.mixbar{display:flex;height:22px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.mixbar div{display:flex;align-items:center;justify-content:center;font-size:10px;
+  font-weight:700;color:#0a0c10;white-space:nowrap;overflow:hidden;transition:width .4s}
+.mixlegend{display:flex;gap:14px;margin-top:7px;font-size:11px;color:var(--dim);flex-wrap:wrap}
+.mixlegend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.8px;
+  text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+td{padding:6px 8px;border-bottom:1px solid rgba(35,41,54,.5)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--panel2)}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.err{color:var(--red)}
+.okdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:var(--green)}
+.errdot{background:var(--red)}
+.statebar{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  margin-top:3px;min-width:2px}
+
+/* ---------- map ---------- */
+#mapwrap{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+#map{height:72vh;min-height:460px;background:#0a0c10}
+.leaflet-container{background:#0a0c10;font:inherit}
+.leaflet-popup-content-wrapper{background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.leaflet-popup-tip{background:var(--panel2)}
+.leaflet-popup-content{margin:11px 14px;font-size:12.5px;line-height:1.5}
+.pop-t{font-weight:700;margin-bottom:4px}
+.pop-r{display:flex;justify-content:space-between;gap:12px;color:var(--dim)}
+.pop-r b{color:var(--text)}
+@keyframes pulse{0%{stroke-opacity:.9;stroke-width:2}70%{stroke-opacity:.05;stroke-width:11}100%{stroke-opacity:0;stroke-width:12}}
+.pulse{animation:pulse 1.6s ease-out infinite}
+#radarctl{position:absolute;top:12px;right:12px;z-index:1000;display:flex;gap:7px;align-items:center}
+#radarbtn{padding:5px 13px;border-radius:18px;font-size:12px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);color:var(--text)}
+#radarbtn.on{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+#legend{position:absolute;bottom:12px;left:12px;z-index:1000;background:rgba(18,21,28,.92);
+  border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:11px;color:var(--dim)}
+#legend div{display:flex;align-items:center;gap:7px;margin:2px 0}
+#legend i{width:9px;height:9px;border-radius:50%}
+
+/* ---------- chips & layer rows ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:3px 11px;border-radius:14px;font-size:11.5px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--line);color:var(--dim);user-select:none}
+.chip.on{color:var(--text);border-color:var(--accent);background:rgba(245,166,35,.08)}
+.row{display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:8px;
+  cursor:pointer;font-size:12.5px;user-select:none}
+.row:hover{background:var(--panel2)}
+.row.off{opacity:.42}
+.row .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.row .cnt{margin-left:auto;color:var(--dim);font-size:11px}
+#sitefilter{width:100%;padding:7px 11px;border-radius:8px;font-size:12.5px;margin-bottom:8px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--text)}
+#sitefilter:focus{outline:none;border-color:var(--accent)}
+details summary{cursor:pointer;color:var(--dim);font-size:12.5px;user-select:none;padding:2px 0}
+details[open] summary{margin-bottom:8px}
+
+/* ---------- evidence ---------- */
+.verdict{padding:13px 16px;border-radius:10px;font-size:13.5px;margin-bottom:12px;
+  border:1px solid var(--line);background:var(--panel2)}
+.verdict.sig{border-color:var(--red);background:rgba(255,92,92,.08)}
+.verdict.nosig{border-color:var(--line)}
+.score{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.score .card{margin:0}
+.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:10px;
+  font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.b-red{background:rgba(255,92,92,.15);color:var(--red)}
+.b-amber{background:rgba(245,166,35,.15);color:var(--amber)}
+.b-dim{background:var(--panel2);color:var(--dim)}
+.b-green{background:rgba(61,220,132,.15);color:var(--green)}
+
+/* ---------- misc ---------- */
+.spark{width:100%;height:64px}
+.longrow{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px;
+  border-bottom:1px solid rgba(35,41,54,.5)}
+.longrow:last-child{border-bottom:0}
+footer{margin:26px 0 40px;text-align:center;color:var(--dim);font-size:11.5px;line-height:2}
+#boot{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
+  justify-content:center;z-index:2000;flex-direction:column;gap:12px;transition:opacity .4s}
+#boot.hide{opacity:0;pointer-events:none}
+.spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#errbanner{display:none;background:rgba(255,92,92,.1);border:1px solid var(--red);
+  border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12.5px}
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="side">
-    <header><h1>GRIDWATCH</h1><span class="pulse" title="auto-refreshing"></span>
-      <span class="meta" id="refresh">—</span>
-      <button id="refetch" onclick="refetchNow()" title="re-fetch the latest published data (does not re-scrape utilities)"
-        style="margin-left:auto;padding:3px 10px;font-size:12px">↻ refresh</button></header>
-    <div class="sub" id="tagline">outages &times; weather &times; data center proximity</div>
+<div id="boot"><div class="spin"></div><div class="meta">loading the grid…</div></div>
 
-    <div class="kstrip">
-      <div class="k"><div class="v" id="s-out">—</div><div class="l">outages</div></div>
-      <div class="k"><div class="v" id="s-cust">—</div><div class="l">customers</div></div>
-      <div class="k"><div class="v" id="s-big">—</div><div class="l">largest</div></div>
-      <div class="k"><div class="v" id="s-reg">—</div><div class="l">feeds</div></div>
+<header>
+  <div class="hrow">
+    <div class="logo">⚡ <b>GRIDWATCH</b></div>
+    <div class="status"><span class="sdot" id="agedot"></span><span id="agetext">—</span></div>
+    <div class="status" id="feedpill">—</div>
+    <button id="refetch" onclick="refetchNow()" title="re-fetch published data (does not re-scrape utilities)">↻ refresh</button>
+  </div>
+  <nav>
+    <div class="tab active" data-tab="live">Live</div>
+    <div class="tab" data-tab="history">History</div>
+    <div class="tab" data-tab="evidence">Evidence</div>
+    <div class="tab" data-tab="burden">Burden</div>
+  </nav>
+</header>
+
+<main>
+<div id="errbanner"></div>
+
+<!-- ============ LIVE ============ -->
+<div id="tab-live">
+  <div class="kpis" id="kpis"></div>
+  <div class="grid">
+    <div>
+      <div id="mapwrap">
+        <div id="map"></div>
+        <div id="radarctl"><button id="radarbtn">🌧 radar</button><span id="radarclock" class="meta" style="min-width:52px"></span></div>
+        <div id="legend"></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h2>Outage mix</h2>
+        <div class="mixbar" id="mixbar"></div><div class="mixlegend" id="mixlegend"></div></div>
+      <div class="card"><h2>Regions</h2>
+        <div class="chips" id="regionchips"></div></div>
+      <div class="card"><details id="sitesbox"><summary>Sites & layers</summary>
+        <input id="sitefilter" placeholder="filter sites & layers… (Enter = fly to first match)">
+        <div id="sitelist"></div></details></div>
     </div>
-
-    <div class="tabs">
-      <div class="tab active" data-tab="live">Live</div>
-      <div class="tab" data-tab="history">History</div>
-      <div class="tab" data-tab="evidence">Evidence</div>
-      <div class="tab" data-tab="burden">Burden</div>
-    </div>
-
-    <div id="tab-live">
-      <div class="card"><h2>Regions</h2><div class="chips" id="regchips"></div>
-        <div style="margin-top:8px"><span class="chip" id="reg-all">all</span>
-        <span class="chip" id="reg-none">none</span></div></div>
-      <div class="card"><h2>Outage mix</h2><div id="classbar" class="meta">—</div></div>
-      <div class="card"><h2>By state</h2>
-        <table id="statetable"><thead><tr><th>state</th><th class="n">out</th>
-        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
-      <div class="card" id="strainwrap" style="display:none">
-        <h2>Grid strain — demand vs forecast</h2>
+    <div>
+      <div class="card" id="strainwrap" style="display:none"><h2>Grid strain — demand vs forecast</h2>
         <div id="straincard"></div></div>
       <div class="card"><h2>Feed status</h2>
-        <table id="feedtable"><thead><tr><th>feed</th><th class="n">out</th>
-        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
-      <div class="card"><h2>Classification</h2><div id="legend"></div>
-        <div style="margin-top:10px;display:flex;gap:8px">
-          <button id="csv">Export CSV</button>
-        </div>
-        <div class="meta" id="live-meta" style="margin-top:8px">loading…</div></div>
-      <div class="card"><h2>Top events</h2>
-        <table id="topev"><thead><tr><th>reg</th><th>cause</th>
-        <th class="n">cust</th></tr></thead><tbody></tbody></table></div>
-      <div class="card"><details id="sitesbox"><summary style="cursor:pointer">
-        <h2 style="display:inline">Sites & layers <span class="badge" id="sitecount"></span></h2></summary>
-        <div style="margin-top:8px"></div>
-        <input id="sitefilter" placeholder="filter sites…" style="width:100%;
-          background:var(--panel);border:1px solid var(--line);border-radius:8px;
-          color:var(--text);padding:6px 10px;margin-bottom:8px;font:inherit">
-        <div id="sitelist"></div>
-        <div class="caveat" style="margin-top:8px">
-          <b>solid ring</b> = active change (drives evidence) ·
-          <b>dashed</b> = operating (context) ·
-          <b>gray</b> = control corridor ·
-          <b>faded</b> = territory we don't poll</div></details></div>
-    </div>
-
-    <div id="tab-history" style="display:none">
-      <div class="card"><h2>This week</h2><div id="digestcard" class="meta">—</div></div>
-      <div class="card"><h2>Customers affected — last 14 days</h2>
-        <svg id="spark" width="100%" height="56" preserveAspectRatio="none"></svg>
-        <div class="meta" id="sparkmeta"></div></div>
-      <div class="card"><h2>Reliability by region</h2>
-        <table id="reliatable"><thead><tr><th>region</th><th class="n">now</th>
-        <th class="n">fair%</th><th class="n">avg fix</th><th class="n">momentary%</th></tr></thead>
+        <table id="feedtable"><thead><tr><th>feed</th><th class="n">out</th><th class="n">cust</th></tr></thead>
         <tbody></tbody></table></div>
-      <div class="card"><h2>Restoration & momentary events (7d)</h2>
-        <div class="kpis" style="margin-bottom:8px">
-          <div class="kpi"><div class="lbl">network avg close-out</div>
-            <div class="big" id="dur-avg">—</div></div>
-          <div class="kpi"><div class="lbl">longest recent restoration</div>
-            <div class="big" id="dur-max">—</div></div></div>
-        <table id="durtable"><thead><tr><th>region</th>
-          <th class="n">avg min</th><th class="n">median</th>
-          <th class="n">momentary</th></tr></thead><tbody></tbody></table>
-        <div class="caveat" id="durnote">loading…</div></div>
-      <div class="card"><h2>Timeline — unique outages/day</h2>
-        <div id="tl" title="amber = fair-weather share, blue = weather"></div>
-        <div class="meta" id="tl-meta">click a bar to load that day</div></div>
-      <div class="card"><h2>Snapshot browser</h2>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="daysel"></select><button id="loadday">Load</button></div>
-        <div class="meta" id="hist-meta" style="margin-top:8px"></div>
-        <div id="spark" title="unique outages per hour (UTC)"></div>
-        <div class="caveat">Deduplicated across 15-min polls; last observation wins.</div></div>
-    </div>
-
-    <div id="tab-evidence" style="display:none">
-      <div class="card"><h2>The claim under test</h2>
-        <div class="meta">Fair-weather distribution outages cluster near data
-        center sites <b>in active change</b> (construction/contested/announced)
-        at a higher rate than elsewhere. Operating sites are scored below but
-        excluded from the headline — they sit in dense urban feeders and would
-        confound it.</div>
-        <div style="margin:10px 0 4px" class="chips" id="evwin">
-          <span class="chip" data-d="7">7d</span>
-          <span class="chip" data-d="14">14d</span>
-          <span class="chip on" data-d="30">30d</span>
-          <span class="chip" data-d="9999">all</span></div>
-        <div class="kpis">
-          <div class="kpi"><div class="lbl">fair-weather share, active-site rings</div>
-            <div class="big" id="kpi-near">—</div></div>
-          <div class="kpi"><div class="lbl">fair-weather share, elsewhere</div>
-            <div class="big" id="kpi-far">—</div></div>
-          <div class="kpi"><div class="lbl">ratio (near / elsewhere)</div>
-            <div class="big" id="kpi-ratio">—</div></div>
-          <div class="kpi"><div class="lbl">unique outages in window</div>
-            <div class="big" id="kpi-n">—</div></div></div>
-        <div class="caveat" id="ev-verdict"></div></div>
-      <div class="card"><h2>Active vs control</h2>
-        <div class="meta" id="ctl-compare">accumulating…</div></div>
-      <div class="card"><h2>Per-site scorecard</h2>
-        <table id="sitetable"><thead><tr><th>site</th><th>status</th>
-          <th class="n">fair-wx</th><th class="n">total</th></tr></thead><tbody></tbody></table>
-        <div class="caveat">CONTROL rows are matched growth corridors with no data
-        center. If controls run as hot as active sites, the signal is
-        "construction corridor," not "data center."</div></div>
-      <div class="card"><h2>Honesty checklist</h2>
-        <div class="caveat">&bull; One day is noise; weeks are evidence.<br>
-        &bull; Weather flags: trailing-3h gusts/wind/precip/temp + NWS alerts +
-        utility-admitted weather causes.<br>
-        &bull; Operating DCs are transmission-interconnected; the plausible
-        mechanism is construction-phase distribution stress.<br>
-        &bull; Reliability ≠ rates. PJM capacity costs are a separate dataset.</div></div>
-    </div>
-
-    <div id="tab-burden" style="display:none">
-      <div class="card" id="nyflowswrap" style="display:none">
-        <h2>NY zonal prices — why they build upstate</h2>
-        <div id="nyflowscard"></div></div>
-      <div class="card" id="eiawrap" style="display:none">
-        <h2>Zone demand — EIA-930 (public domain)</h2>
-        <div id="eiacard"></div></div>
-      <div class="card" id="nywrap" style="display:none">
-        <h2>NYISO zone prices — public, no key</h2><div id="nycard"></div></div>
-      <div class="card" id="flowswrap" style="display:none">
-        <h2>PJM zonal prices — the flows layer</h2>
-        <div id="flowscard"></div></div>
-      <div class="card"><h2>Watch list — decisions & milestones</h2>
-        <div id="watchlist" class="meta">loading…</div></div>
-      <div class="card"><h2>The interstate cost shift (PJM)</h2>
-        <div class="meta">Ohio shares one capacity market with Northern
-        Virginia's Data Center Alley. Electrons aren't tagged — the burden is
-        visible in prices, socialized transmission, and reserve margins.</div>
-        <div class="kpis" style="margin-top:10px">
-          <div class="kpi"><div class="lbl">capacity price, 2 yrs</div>
-            <div class="big" id="b-mult">—</div></div>
-          <div class="kpi"><div class="lbl">avg OH bill impact /mo</div>
-            <div class="big" id="b-oh">—</div></div>
-          <div class="kpi"><div class="lbl">of 25/26 spike from DCs</div>
-            <div class="big" id="b-dc">—</div></div>
-          <div class="kpi"><div class="lbl">DC transmission on ratepayers</div>
-            <div class="big" id="b-tx">—</div></div></div></div>
-      <div class="card"><h2>Capacity auction trajectory ($/MW-day)</h2>
-        <div id="bchart" style="display:flex;align-items:flex-end;gap:10px;height:120px;margin:6px 0"></div>
-        <div class="caveat" id="bnotes"></div></div>
-      <div class="card"><h2>Mechanisms</h2><div class="caveat" id="bmech"></div></div>
-      <div class="card"><h2>Counterpoint & sources</h2>
-        <div class="caveat" id="bcounter"></div>
-        <div class="caveat" id="bsrc" style="margin-top:6px"></div></div>
+      <div class="card"><h2>By state</h2>
+        <table id="statetable"><thead><tr><th>state</th><th class="n">out</th><th class="n">cust</th></tr></thead>
+        <tbody></tbody></table></div>
+      <div class="card"><h2>Top events</h2><div id="topevents" class="meta">—</div></div>
     </div>
   </div>
-  <div id="map"></div>
 </div>
+
+<!-- ============ HISTORY ============ -->
+<div id="tab-history" style="display:none">
+  <div class="card"><h2>This week</h2><div id="digestcard" class="meta">—</div></div>
+  <div class="grid">
+    <div>
+      <div class="card"><h2>Customers affected — last 14 days</h2>
+        <svg id="spark" class="spark" preserveAspectRatio="none"></svg>
+        <div class="meta" id="sparkmeta"></div></div>
+      <div class="card"><h2>Daily timeline</h2><div id="timeline" class="meta">—</div></div>
+    </div>
+    <div>
+      <div class="card"><h2>Reliability by region</h2>
+        <table id="reliatable"><thead><tr><th>region</th><th class="n">now</th><th class="n">fair%</th>
+        <th class="n">avg fix</th><th class="n">mom%</th></tr></thead><tbody></tbody></table></div>
+      <div class="card"><h2>Restoration (7d)</h2><div id="durnote" class="meta"></div>
+        <div id="longest"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EVIDENCE ============ -->
+<div id="tab-evidence" style="display:none">
+  <div class="verdict nosig" id="ctl-compare">accumulating…</div>
+  <div class="card"><h2>Per-site scorecard — 30 days</h2>
+    <div class="meta" style="margin-bottom:10px">Fair-weather outages inside each active site's ring.
+      One snapshot is noise; the pattern over weeks is the evidence. Null results publish too.</div>
+    <div class="score" id="scorecard"></div></div>
+</div>
+
+<!-- ============ BURDEN ============ -->
+<div id="tab-burden" style="display:none">
+  <div class="grid">
+    <div>
+      <div class="card" id="nywrap" style="display:none"><h2>NYISO zone prices — public, no key</h2>
+        <div id="nycard"></div></div>
+      <div class="card" id="eiawrap" style="display:none"><h2>Zone demand — EIA-930 (public domain)</h2>
+        <div id="eiacard"></div></div>
+      <div class="card" id="flowswrap" style="display:none"><h2>PJM zonal prices</h2>
+        <div id="flowscard"></div></div>
+    </div>
+    <div>
+      <div class="card"><h2>Watch list — decisions & milestones</h2>
+        <div id="watchlist" class="meta">loading…</div></div>
+      <div class="card"><h2>PJM capacity — the receipts</h2><div id="burdencard" class="meta">—</div></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  GRIDWATCH · public-interest grid reliability instrument · Ohio → Georgia<br>
+  data: <a href="data/latest.json">JSON</a> · <a href="data/latest.geojson">GeoJSON</a> ·
+  <a href="data/feed.xml">RSS</a> · <a href="https://github.com/ParadoxSnowman/gridwatch">source</a><br>
+  <span style="font-size:10.5px">outage feeds © respective utilities · weather Open-Meteo + NWS ·
+  grid layers OSM (true topology is CEII) · prices/demand NYISO + US EIA (public domain)</span>
+</footer>
+</main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const COLORS = {
-  "WEATHER-LIKELY": "#3b82f6",
-  "AMBIGUOUS (weather + DC-proximate)": "#a855f7",
-  "DC-PROXIMATE FAIR-WEATHER": "#ef4444",
-  "DC-PROXIMATE FAIR-WEATHER (construction-type cause)": "#b91c1c",
-  "UNEXPLAINED FAIR-WEATHER": "#f59e0b",
-  "NEAR OPERATING DC FAIR-WEATHER (context)": "#ec4899",
-};
+/* ================= state ================= */
 const REFRESH_MS = 2*60*1000;
-const map = L.map("map").setView([40.7,-82.4], 7);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  {attribution:"&copy; OSM &copy; CARTO",maxZoom:18}).addTo(map);
-
-let DCS=[],AUTO=[],INFRA=[],PLINES=[],RADIUS=8,groups={},LATEST=null,INDEX={days:[]},
-    activeRegions=new Set(), currentView="live";
-const dcLayer=L.layerGroup().addTo(map), autoLayer=L.layerGroup(),
-      infraLayer=L.layerGroup().addTo(map), plineLayer=L.layerGroup();
-const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const hav=(a,b,c,d)=>{const R=6371,p=Math.PI/180,
-  x=Math.sin((c-a)*p/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin((d-b)*p/2)**2;
+let LATEST=null,PREV=null,INDEX={},DUR=null,DCS=[],AUTO=[],INFRA=[],BURDEN=null,
+    FLOWS=null,EIAD=null,STRAIN=null,NYF=null,DIGEST=null,
+    PL_SUBS=[],PL_PLANTS=[],BACKBONE=[],
+    activeRegions=new Set(),currentView="live";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=n=>Number(n||0).toLocaleString();
+const hav=(a,b,c,d)=>{const R=6371,dl=(c-a)*Math.PI/180,dn=(d-b)*Math.PI/180,
+  x=Math.sin(dl/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dn/2)**2;
   return 2*R*Math.asin(Math.sqrt(x));};
-const fmt=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+"k":String(n);
 
-function clearOutages(){Object.values(groups).forEach(g=>map.removeLayer(g));groups={};}
+/* ================= map ================= */
+const map=L.map("map",{zoomControl:true,attributionControl:true}).setView([39.4,-80.5],6);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  {attribution:'© <a href="https://carto.com/">CARTO</a> © OSM',maxZoom:19,subdomains:"abcd"}).addTo(map);
+const outLayer=L.layerGroup().addTo(map),
+      dcLayer=L.layerGroup().addTo(map),
+      autoLayer=L.layerGroup(),
+      infraLayer=L.layerGroup().addTo(map),
+      subLayer=L.layerGroup(),plantLayer=L.layerGroup(),
+      bbLayers={hi:L.layerGroup(),mid:L.layerGroup(),lo:L.layerGroup()};
 
-function plot(outages, metaEl, label){
-  clearOutages();
-  const counts={},custs={};
-  const shown = outages.filter(o=>!activeRegions.size||activeRegions.has(o.region));
-  for (const o of shown){
-    const cls=o.classification; counts[cls]=(counts[cls]||0)+1;
-    custs[cls]=(custs[cls]||0)+(o.customers||0);
-    if(!groups[cls]) groups[cls]=L.layerGroup().addTo(map);
-    const r=Math.max(4,Math.min(18,4+Math.sqrt(o.customers||0)));
-    const age=o.polled_at?` &middot; ${esc(o.polled_at.slice(11,16))}Z`:"";
-    const etr=o.etr?`<br>ETR: ${esc(String(o.etr).replace("T"," ").slice(0,16))}Z`:"";
-    L.circleMarker([o.lat,o.lon],{radius:r,weight:1,fillOpacity:.72,
-      color:COLORS[cls]||"#9ca3af",fillColor:COLORS[cls]||"#9ca3af"})
-      .bindPopup(`<b>${esc(cls)}</b> <span class="badge">${esc(o.region)}</span><br>
-        Customers: ${o.customers}${age}${etr}<br>
-        Utility cause: ${esc(o.cause)||"(none)"}<br>
-        Crew: ${esc(o.crew_status)||"—"}<br>${esc(o.rationale)}`)
-      .addTo(groups[cls]);
+const CLASSCOLOR=r=>r.dc_flag?"var(--red)":
+  String(r.classification||"").startsWith("NEAR OPERATING")?"var(--pink)":
+  r.weather_flag?"var(--blue)":"var(--amber)";
+const RAW={red:"#ff5c5c",pink:"#f472b6",blue:"#4c9aff",amber:"#f5a623"};
+const cRaw=r=>r.dc_flag?RAW.red:String(r.classification||"").startsWith("NEAR OPERATING")?RAW.pink:
+  r.weather_flag?RAW.blue:RAW.amber;
+
+function plot(){
+  outLayer.clearLayers();
+  if(!LATEST) return;
+  const rs=(LATEST.outages||[]).filter(o=>!activeRegions.size||activeRegions.has(o.region));
+  for(const o of rs){
+    const col=cRaw(o), rad=Math.min(16,4+Math.sqrt(o.customers||1)/2.2);
+    if(o.dc_flag)
+      L.circleMarker([o.lat,o.lon],{radius:rad+5,color:RAW.red,weight:2,fill:false,
+        className:"pulse"}).addTo(outLayer);
+    L.circleMarker([o.lat,o.lon],{radius:rad,color:col,fillColor:col,fillOpacity:.75,weight:1})
+      .bindPopup(popupHtml(o)).addTo(outLayer);
   }
-  const legend=document.getElementById("legend"); legend.innerHTML="";
-  for (const cls of Object.keys(COLORS)){
-    if(!(cls in counts)) continue;
-    const row=document.createElement("div"); row.className="row";
-    row.innerHTML=`<span class="dot" style="background:${COLORS[cls]}"></span>
-      <span>${esc(cls)}</span><span class="cnt">${counts[cls]} · ${fmt(custs[cls])} cust</span>`;
-    row.onclick=()=>{const g=groups[cls];
-      if(map.hasLayer(g)){map.removeLayer(g);row.classList.add("off");}
-      else{map.addLayer(g);row.classList.remove("off");}};
-    legend.appendChild(row);
-  }
-  if(metaEl) metaEl.textContent=label;
-  // KPI strip
-  document.getElementById("s-out").textContent=shown.length;
-  document.getElementById("s-cust").textContent=fmt(shown.reduce((a,o)=>a+(o.customers||0),0));
-  document.getElementById("s-big").textContent=shown.length?fmt(Math.max(...shown.map(o=>o.customers||0))):"0";
-  document.getElementById("s-reg").textContent=new Set(shown.map(o=>o.region)).size;
-  window._shown=shown;
-  const tb=document.querySelector("#topev tbody");
-  if(tb){tb.innerHTML="";
-    shown.slice().sort((a,b)=>(b.customers||0)-(a.customers||0)).slice(0,8)
-      .forEach(o=>{const tr=document.createElement("tr");
-        tr.style.cursor="pointer";
-        tr.innerHTML=`<td>${esc(o.region)}</td>
-          <td>${esc((o.cause||o.classification).slice(0,26))}</td>
-          <td class="n">${fmt(o.customers||0)}</td>`;
-        tr.onclick=()=>map.setView([o.lat,o.lon],12);
-        tb.appendChild(tr);});}
+  drawLegend(rs.length);
+}
+function popupHtml(o){
+  const rows=[["region",o.region],["customers",fmt(o.customers)],
+    ["class",(o.classification||"").toLowerCase()],
+    o.cause?["cause",o.cause]:null,
+    o.dc_name?["near",`${o.dc_name} (${o.dc_km} km)`]:null,
+    o.op_dc_name?["context",`${o.op_dc_name} (${o.op_dc_km} km)`]:null,
+    (o.wind_kmh||o.precip_mm)?["wx",`${o.wind_kmh||0} km/h wind · ${o.precip_mm||0} mm`]:null,
+    o.nws_alerts?["NWS",o.nws_alerts]:null,
+    o.etr?["ETR",o.etr]:null].filter(Boolean);
+  return `<div class="pop-t">${esc(o.region)} outage</div>`+
+    rows.map(([k,v])=>`<div class="pop-r"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")+
+    (o.rationale?`<div class="meta" style="margin-top:5px">${esc(o.rationale)}</div>`:"");
+}
+function drawLegend(n){
+  const el=document.getElementById("legend"); if(!el) return;
+  el.innerHTML=`<div><i style="background:${RAW.blue}"></i>weather-likely</div>
+    <div><i style="background:${RAW.amber}"></i>fair-weather</div>
+    <div><i style="background:${RAW.red}"></i>near active DC site</div>
+    <div><i style="background:${RAW.pink}"></i>near operating DC (context)</div>
+    <div class="meta" style="margin-top:4px">${n} shown · size = customers</div>`;
 }
 
-function regionChips(){
-  const regs=[...new Set((LATEST.outages||[]).map(o=>o.region))].sort();
-  const el=document.getElementById("regchips"); el.innerHTML="";
-  for(const r of regs){
-    const c=document.createElement("span"); c.className="chip on"; c.textContent=r;
-    activeRegions.add(r);
-    c.onclick=()=>{ if(activeRegions.has(r)){activeRegions.delete(r);c.classList.remove("on");}
-      else{activeRegions.add(r);c.classList.add("on");}
-      plot(LATEST.outages||[],document.getElementById("live-meta"),liveLabel()); };
-    el.appendChild(c);
+/* ---------- curated DC sites + rings ---------- */
+function drawDCs(){
+  dcLayer.clearLayers();
+  const R=(LATEST&&LATEST.dc_radius_km)||8;
+  for(const s of DCS){
+    if(!s.lat) continue;
+    const active=["construction","contested","announced"].includes(s.status);
+    const ctl=s.status==="control";
+    const op=String(s.status||"").startsWith("operating");
+    const col=ctl?"#3ddc84":op?RAW.pink:active?RAW.red:"#8a93a6";
+    if((active||op)&&!String(s.coverage||"").startsWith("context"))
+      L.circle([s.lat,s.lon],{radius:R*1000,color:col,weight:1,fill:false,
+        dashArray:op?"4 6":null,opacity:.55}).addTo(dcLayer);
+    if(ctl) L.circle([s.lat,s.lon],{radius:R*1000,color:col,weight:1,fill:false,
+        dashArray:"2 8",opacity:.5}).addTo(dcLayer);
+    L.circleMarker([s.lat,s.lon],{radius:6,color:col,fillColor:col,fillOpacity:.9,weight:1.5})
+      .bindPopup(`<div class="pop-t">${esc(s.name)}</div>
+        <div class="pop-r"><span>operator</span><b>${esc(s.operator||"?")}</b></div>
+        <div class="pop-r"><span>status</span><b>${esc(s.status)}</b></div>
+        <div class="pop-r"><span>territory</span><b>${esc(s.territory||"?")}</b></div>
+        <div class="pop-r"><span>coverage</span><b>${esc(s.coverage||"?")}</b></div>
+        <div class="meta" style="margin-top:5px">${esc(s.source||"")}</div>`)
+      .addTo(dcLayer);
   }
 }
-const liveLabel=()=>`${LATEST.count} outages · updated ${LATEST.generated_at} UTC`;
-
-const STATE_OF={OH:"OH","OH-AEP":"OH","OH-AES":"OH","OH-DUKE":"OH","PA-NY":"PA",
- PECO:"PA",NJ:"NJ","NJ-PSEG":"NJ","NJ-ACE":"NJ","MD-WV":"MD/WV",BGE:"MD",
- "DC-PEPCO":"DC","DE-DELMARVA":"DE","NY-NGRID":"NY","NY-CENHUD":"NY","IN-DUKE":"IN",
- "VA-DOM":"VA","VA-NOVEC":"VA","VAWV-APCO":"VA/WV","NC-DEC":"NC","NC-DEP":"NC",
- "SC-DOM":"SC","MA-NGRID":"MA","NE-EVERSOURCE":"CT/MA/NH"};
-function renderStates(){
-  const tb=document.querySelector("#statetable tbody"); if(!tb) return;
-  const agg={};
-  for(const f of (LATEST.feeds||[])){
-    if(f.error) continue;
-    const st=STATE_OF[f.name]||f.name;
-    (agg[st]=agg[st]||{o:0,c:0}); agg[st].o+=f.outages; agg[st].c+=f.customers||0;
+function drawAuto(){
+  autoLayer.clearLayers();
+  for(const a of AUTO){
+    if(!a.lat) continue;
+    L.circleMarker([a.lat,a.lon],{radius:4,color:RAW.pink,fillColor:RAW.pink,fillOpacity:.7,weight:1})
+      .bindPopup(`<div class="pop-t">${esc(a.name||"data center")}</div>
+        <div class="meta">OSM-mapped operating facility (context tier)</div>`)
+      .addTo(autoLayer);
   }
-  tb.innerHTML="";
-  Object.entries(agg).sort((a,b)=>b[1].c-a[1].c).forEach(([st,v])=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(st)}</td><td class="n">${v.o}</td><td class="n">${fmt(v.c)}</td>`;
-    tb.appendChild(tr);});
 }
-function renderClassbar(){
-  const el=document.getElementById("classbar"); if(!el) return;
-  const os=LATEST.outages||[]; if(!os.length){el.textContent="—";return;}
-  const n=os.length;
-  const w=os.filter(o=>o.weather_flag).length;
-  const d=os.filter(o=>o.dc_flag).length;
-  const ctx=os.filter(o=>String(o.classification||"").startsWith("NEAR OPERATING")).length;
-  const fair=n-w;
-  const pc=x=>(100*x/n).toFixed(0)+"%";
-  el.innerHTML=`<b>${pc(w)}</b> weather-likely · <b>${pc(fair)}</b> fair-weather
-    · <b>${d}</b> near active DC sites · <b>${ctx}</b> near operating DCs (context)`;
-}
-function renderFeeds(){
-  const tb=document.querySelector("#feedtable tbody"); if(!tb) return;
-  tb.innerHTML="";
-  for(const f of (LATEST.feeds||[])){
-    const tr=document.createElement("tr");
-    if(f.error){
-      tr.innerHTML=`<td style="color:var(--red)">${esc(f.name)}</td>
-        <td colspan="2" style="color:var(--red);font-size:11px">${esc(f.error.slice(0,44))}</td>`;
-    } else {
-      tr.innerHTML=`<td>${esc(f.name)}</td><td class="n">${f.outages}</td>
-        <td class="n">${fmt(f.customers||0)}</td>`;
+function drawInfra(){
+  infraLayer.clearLayers();
+  for(const p of INFRA){
+    if(p.path&&p.path.length>1){
+      L.polyline(p.path,{color:"#f97316",weight:3,dashArray:"10 8",opacity:.8})
+        .bindPopup(`<div class="pop-t">⚡ ${esc(p.name)}</div>
+          <div class="pop-r"><span>type</span><b>${esc(p.type)}</b></div>
+          <div class="pop-r"><span>status</span><b>${esc(p.status)}</b></div>
+          <div class="meta" style="margin-top:5px">${esc(p.source||"")}</div>`)
+        .addTo(infraLayer);
+      continue;
     }
-    tb.appendChild(tr);
+    if(!p.lat) continue;
+    L.circleMarker([p.lat,p.lon],{radius:6,color:"#f97316",fillColor:"#7c2d12",fillOpacity:.95,weight:2})
+      .bindPopup(`<div class="pop-t">⚡ ${esc(p.name)}</div>
+        <div class="pop-r"><span>type</span><b>${esc(p.type)}</b></div>
+        <div class="pop-r"><span>status</span><b>${esc(p.status)}</b></div>
+        <div class="meta" style="margin-top:5px">${esc(p.source||"")}</div>`)
+      .addTo(infraLayer);
   }
-  if(!(LATEST.feeds||[]).length)
-    tb.innerHTML=`<tr><td colspan="3" class="meta">feed stats appear after the next poll</td></tr>`;
 }
 
+/* ---------- lazy heavy layers + rows ---------- */
+function addRow(label,col,cnt,layer,builder,on=false){
+  const list=document.getElementById("sitelist");
+  const row=document.createElement("div");row.className="row"+(on?"":" off");
+  row.innerHTML=`<span class="dot" style="background:${col}"></span>
+    <span>${esc(label)}</span><span class="cnt">${cnt}</span>`;
+  let built=false;
+  const build=()=>{if(!built){built=true;builder&&builder();}};
+  if(on){build();map.addLayer(layer);}
+  row.onclick=()=>{if(map.hasLayer(layer)){map.removeLayer(layer);row.classList.add("off");}
+    else{build();map.addLayer(layer);row.classList.remove("off");}};
+  list.appendChild(row);
+  return row;
+}
+function buildSideRows(){
+  const list=document.getElementById("sitelist"); list.innerHTML="";
+  // curated sites as fly-to rows
+  for(const s of DCS){
+    if(!s.lat) continue;
+    const ctl=s.status==="control",
+          op=String(s.status||"").startsWith("operating"),
+          col=ctl?"#3ddc84":op?RAW.pink:RAW.red;
+    const row=document.createElement("div");row.className="row";row.dataset.site=s.name.toLowerCase();
+    row.innerHTML=`<span class="dot" style="background:${col}"></span>
+      <span>${esc(s.name)}</span><span class="cnt">${esc(s.status)}</span>`;
+    row.onclick=()=>map.setView([s.lat,s.lon],12);
+    list.appendChild(row);
+  }
+  addRow("OSM operating DCs","#f472b6",AUTO.length,autoLayer,drawAuto,false);
+  // backbone tiers
+  if(BACKBONE.length){
+    const tier=v=>v>=700000?"hi":v>=450000?"mid":"lo";
+    const style={hi:{color:"#ef4444",weight:3.5,opacity:.75},
+                 mid:{color:"#f97316",weight:2.5,opacity:.65},
+                 lo:{color:"#eab308",weight:1.5,opacity:.5}};
+    const cnt={hi:0,mid:0,lo:0};
+    for(const l of BACKBONE) cnt[tier(l.v)]++;
+    const mkB=k=>()=>{for(const l of BACKBONE){if(tier(l.v)!==k)continue;
+      L.polyline(l.geom,style[k]).bindPopup(`<div class="pop-t">${esc(l.name)||"HV line"}</div>
+        <div class="pop-r"><span>voltage</span><b>${Math.round(l.v/1000)} kV</b></div>
+        ${l.operator?`<div class="pop-r"><span>operator</span><b>${esc(l.operator)}</b></div>`:""}
+        <div class="meta" style="margin-top:4px">OSM backbone layer</div>`).addTo(bbLayers[k]);}};
+    if(cnt.hi) addRow("765 kV backbone","#ef4444",cnt.hi,bbLayers.hi,mkB("hi"));
+    if(cnt.mid) addRow("500 kV backbone","#f97316",cnt.mid,bbLayers.mid,mkB("mid"));
+    if(cnt.lo) addRow("345 kV backbone","#eab308",cnt.lo,bbLayers.lo,mkB("lo"));
+  }
+  if(PL_SUBS.length) addRow("Substations (OSM)","#fb923c",PL_SUBS.length,subLayer,()=>{
+    for(const s of PL_SUBS) L.circleMarker([s.lat,s.lon],{radius:4,color:"#fb923c",
+      fillColor:"#7c2d12",fillOpacity:.95,weight:1.5})
+      .bindPopup(`<div class="pop-t">⚡ ${esc(s.name)||"substation"}</div>
+        ${s.voltage?`<div class="pop-r"><span>voltage</span><b>${esc(String(s.voltage).replace(/000$/,""))} kV</b></div>`:""}
+        ${s.operator?`<div class="pop-r"><span>operator</span><b>${esc(s.operator)}</b></div>`:""}`)
+      .addTo(subLayer);});
+  if(PL_PLANTS.length) addRow("Power plants (OSM)","#a78bfa",PL_PLANTS.length,plantLayer,()=>{
+    for(const p of PL_PLANTS) L.circleMarker([p.lat,p.lon],{radius:6,color:"#a78bfa",
+      fillColor:"#4c1d95",fillOpacity:.95,weight:2})
+      .bindPopup(`<div class="pop-t">🏭 ${esc(p.name)||"power plant"}</div>
+        <div class="pop-r"><span>source</span><b>${esc(p.source||"?")}</b></div>
+        ${p.output?`<div class="pop-r"><span>output</span><b>${esc(p.output)}</b></div>`:""}
+        <div class="meta" style="margin-top:4px">generation near a DC site — proximity to supply
+        is often WHY the site was chosen</div>`).addTo(plantLayer);});
+  // filter box
+  const f=document.getElementById("sitefilter");
+  f.oninput=()=>{const q=f.value.toLowerCase();
+    for(const r of list.children)
+      r.style.display=r.textContent.toLowerCase().includes(q)?"":"none";};
+  f.onkeydown=e=>{if(e.key==="Enter"){
+    const q=f.value.toLowerCase();
+    const s=DCS.find(x=>x.lat&&x.name.toLowerCase().includes(q));
+    if(s) map.setView([s.lat,s.lon],12);}};
+}
 
-function isContext(s){return String(s.coverage||"").startsWith("context");}
+/* ---------- animated radar ---------- */
 const radarFallback=L.tileLayer(
   "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png",
   {opacity:.55,attribution:"NEXRAD / Iowa State Mesonet"});
-let radarOn=false,radarFrames=[],radarLayers=[],radarIdx=0,radarTimer=null,radarBtn=null,radarClock=null;
+let radarOn=false,radarFrames=[],radarLayers=[],radarIdx=0,radarTimer=null;
+const radarBtn=()=>document.getElementById("radarbtn"),
+      radarClock=()=>document.getElementById("radarclock");
 async function radarStart(){
-  if(radarClock) radarClock.textContent="loading…";
+  radarClock().textContent="loading…";
   try{
     const j=await fetch("https://api.rainviewer.com/public/weather-maps.json").then(r=>r.json());
     radarFrames=(j.radar&&j.radar.past||[]).slice(-6);
@@ -393,170 +472,290 @@ async function radarStart(){
     radarLayers=radarFrames.map(f=>L.tileLayer(
       "https://tilecache.rainviewer.com"+f.path+"/256/{z}/{x}/{y}/2/1_1.png",
       {opacity:0,attribution:"RainViewer"}));
-    const loads=radarLayers.map(l=>new Promise(res=>{
+    await Promise.all(radarLayers.map(l=>new Promise(res=>{
       let done=false; l.once("load",()=>{if(!done){done=true;res();}});
       setTimeout(()=>{if(!done){done=true;res();}},4000);
-      l.addTo(map);}));
-    await Promise.all(loads);
+      l.addTo(map);})));
     if(!radarOn) return;
     radarIdx=radarLayers.length-1;
     radarStep();
-  }catch(e){
-    map.addLayer(radarFallback);
-    if(radarClock) radarClock.textContent="live";
-  }
+  }catch(e){ map.addLayer(radarFallback); radarClock().textContent="live"; }
 }
 function radarStep(){
   if(!radarOn||!radarLayers.length) return;
   radarLayers.forEach((l,i)=>l.setOpacity(i===radarIdx?0.6:0));
-  if(radarClock){
-    const d=new Date(radarFrames[radarIdx].time*1000);
-    radarClock.textContent=String(d.getHours()).padStart(2,"0")+":"+
-      String(d.getMinutes()).padStart(2,"0");
-  }
+  const d=new Date(radarFrames[radarIdx].time*1000);
+  radarClock().textContent=String(d.getHours()).padStart(2,"0")+":"+
+    String(d.getMinutes()).padStart(2,"0");
   const dwell=radarIdx===radarLayers.length-1?2000:800;
   radarIdx=(radarIdx+1)%radarLayers.length;
   radarTimer=setTimeout(radarStep,dwell);
 }
 function radarStop(){
   if(radarTimer){clearTimeout(radarTimer);radarTimer=null;}
-  radarLayers.forEach(l=>map.removeLayer(l));
-  radarLayers=[];radarFrames=[];
+  radarLayers.forEach(l=>map.removeLayer(l)); radarLayers=[];radarFrames=[];
   if(map.hasLayer(radarFallback)) map.removeLayer(radarFallback);
-  if(radarClock) radarClock.textContent="";
+  radarClock().textContent="";
 }
-function drawRadar(){
-  const div=document.createElement("div");
-  div.style.cssText="position:absolute;top:12px;right:12px;z-index:1000;display:flex;gap:6px;align-items:center";
-  div.innerHTML=`<button id="radarbtn" style="padding:5px 12px;border-radius:18px;font-size:12px;
-    background:var(--panel);border:1px solid var(--line);color:var(--text);cursor:pointer">
-    🌧 radar</button><span id="radarclock" class="meta" style="min-width:52px"></span>`;
-  const mapEl=document.getElementById("map");
-  if(mapEl&&mapEl.parentElement){
-    mapEl.parentElement.style.position="relative";
-    mapEl.parentElement.appendChild(div);
-  } else document.body.appendChild(div);
-  radarBtn=div.querySelector("#radarbtn"); radarClock=div.querySelector("#radarclock");
-  radarBtn.onclick=()=>{
+function wireRadar(){
+  radarBtn().onclick=()=>{
     radarOn=!radarOn;
-    radarBtn.style.background=radarOn?"var(--accent)":"var(--panel)";
-    radarBtn.style.color=radarOn?"#0b0d12":"var(--text)";
+    radarBtn().classList.toggle("on",radarOn);
     if(radarOn) radarStart(); else radarStop();
   };
 }
-function siteDeepLink(){
-  const m=location.hash.match(/site=([^&]+)/); if(!m) return;
-  const q=decodeURIComponent(m[1]).toLowerCase();
-  const s=DCS.find(x=>x.lat&&x.name.toLowerCase().includes(q));
-  if(s) map.setView([s.lat,s.lon],12);
+
+/* ================= live-tab renders ================= */
+function kpis(){
+  const el=document.getElementById("kpis"); if(!el||!LATEST) return;
+  const os=LATEST.outages||[], feeds=LATEST.feeds||[];
+  const cust=os.reduce((a,o)=>a+(o.customers||0),0);
+  const fair=os.filter(o=>!o.weather_flag).length;
+  const dcp=os.filter(o=>o.dc_flag).length;
+  const ok=feeds.filter(f=>!f.error).length;
+  const prev=PREV?{
+    n:(PREV.outages||[]).length,
+    c:(PREV.outages||[]).reduce((a,o)=>a+(o.customers||0),0),
+    d:(PREV.outages||[]).filter(o=>o.dc_flag).length}:null;
+  const delta=(now,was)=>{
+    if(was==null||now===was) return `<span class="d flat">—</span>`;
+    const up=now>was;
+    return `<span class="d ${up?"up":"down"}">${up?"▲":"▼"} ${fmt(Math.abs(now-was))}</span>`;};
+  el.innerHTML=`
+    <div class="kpi"><div class="v">${fmt(os.length)}${prev?delta(os.length,prev.n):""}</div><div class="l">active outages</div></div>
+    <div class="kpi"><div class="v">${fmt(cust)}${prev?delta(cust,prev.c):""}</div><div class="l">customers out</div></div>
+    <div class="kpi"><div class="v">${os.length?Math.round(100*fair/os.length):0}%</div><div class="l">fair-weather</div></div>
+    <div class="kpi"><div class="v" style="color:${dcp?"var(--red)":"inherit"}">${dcp}${prev?delta(dcp,prev.d):""}</div><div class="l">near active DC sites</div></div>
+    <div class="kpi"><div class="v" style="color:${ok===feeds.length?"var(--green)":"var(--amber)"}">${ok}/${feeds.length}</div><div class="l">feeds healthy</div></div>`;
 }
-function drawDCs(){
-  dcLayer.clearLayers();
-  const list=document.getElementById("sitelist"); list.innerHTML="";
-  for(const s of DCS){
-    if(!s.lat) continue;
-    const isCtl=s.status==="control", isOp=(s.status||"").startsWith("operating"),
-          isCtx=isContext(s);
-    const col=isCtx?"#4b5563":isCtl?"#64748b":isOp?"#dc8ca6":"#ef4444";
-    if(!isCtx) L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:col,weight:1,
-      fillOpacity:isOp?0:.05,dashArray:isOp?"6 7":null,opacity:isOp?.5:1}).addTo(dcLayer);
-    L.circleMarker([s.lat,s.lon],{radius:isCtx?4:5,color:col,
-      fillColor:isCtx?"#1f2937":isCtl?"#334155":isOp?"#6d2438":"#7f1d1d",
-      fillOpacity:isCtx?.5:1,weight:isCtx?1:2,opacity:isCtx?.55:1})
-      .bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.operator)} — ${esc(s.status)}<br>
-        <span style="color:#8a90a2">${esc(s.territory||"")}</span>
-        ${s.verify?'<br><i style="color:#f59e0b">coords approximate — verify</i>':''}`)
-      .addTo(dcLayer);
-    const row=document.createElement("div"); row.className="row";
-    row.innerHTML=`<span class="dot" style="background:${col}"></span>
-      <span>${esc(s.name.length>32?s.name.slice(0,31)+"…":s.name)}</span>
-      <span class="cnt">${esc(s.status)}</span>`;
-    row.onclick=()=>map.setView([s.lat,s.lon],11);
-    list.appendChild(row);
+function mixbar(){
+  const bar=document.getElementById("mixbar"),leg=document.getElementById("mixlegend");
+  if(!bar||!LATEST) return;
+  const os=LATEST.outages||[]; const n=os.length||1;
+  const dc=os.filter(o=>o.dc_flag).length;
+  const ctx=os.filter(o=>!o.dc_flag&&String(o.classification||"").startsWith("NEAR OPERATING")).length;
+  const w=os.filter(o=>o.weather_flag&&!o.dc_flag).length;
+  const f=n-dc-ctx-w;
+  const seg=(x,c)=>x?`<div style="width:${100*x/n}%;background:${c}">${x>n*0.07?Math.round(100*x/n)+"%":""}</div>`:"";
+  bar.innerHTML=seg(w,RAW.blue)+seg(f,RAW.amber)+seg(ctx,RAW.pink)+seg(dc,RAW.red);
+  leg.innerHTML=`<span><i style="background:${RAW.blue}"></i>weather-likely ${w}</span>
+    <span><i style="background:${RAW.amber}"></i>fair-weather ${f}</span>
+    <span><i style="background:${RAW.pink}"></i>operating-DC context ${ctx}</span>
+    <span><i style="background:${RAW.red}"></i>active-DC proximate ${dc}</span>`;
+}
+const STATE_OF={OH:"OH","OH-AEP":"OH","OH-AES":"OH","OH-DUKE":"OH","PA-NY":"PA",
+ PECO:"PA","PA-PPL":"PA",NJ:"NJ","NJ-PSEG":"NJ","NJ-ACE":"NJ","MD-WV":"MD/WV",BGE:"MD",
+ "DC-PEPCO":"DC","DE-DELMARVA":"DE","NY-NGRID":"NY","NY-CENHUD":"NY","IN-DUKE":"IN",
+ "IN-IM":"IN","VA-DOM":"VA","VA-NOVEC":"VA","VAWV-APCO":"VA/WV","NC-DEC":"NC","NC-DEP":"NC",
+ "SC-DOM":"SC","MA-NGRID":"MA","NE-EVERSOURCE":"CT/MA/NH","KY-LGE":"KY","KY-KU":"KY",
+ "KY-AEP":"KY","RI-RIE":"RI","GA-GPC":"GA"};
+function renderStates(){
+  const tb=document.querySelector("#statetable tbody"); if(!tb||!LATEST) return;
+  const agg={};
+  for(const f of (LATEST.feeds||[])){
+    if(f.error) continue;
+    const st=STATE_OF[f.name]||f.name;
+    (agg[st]=agg[st]||{o:0,c:0}); agg[st].o+=f.outages; agg[st].c+=f.customers||0;
   }
+  const max=Math.max(...Object.values(agg).map(v=>v.c),1);
+  tb.innerHTML="";
+  Object.entries(agg).sort((a,b)=>b[1].c-a[1].c).forEach(([st,v])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(st)}<div class="statebar" style="width:${Math.max(3,100*v.c/max)}%"></div></td>
+      <td class="n">${v.o}</td><td class="n">${fmt(v.c)}</td>`;
+    tb.appendChild(tr);});
 }
-function drawAuto(){
-  autoLayer.clearLayers();
-  for(const s of AUTO){
-    L.circle([s.lat,s.lon],{radius:RADIUS*1000,color:"#dc8ca6",weight:1,
-      fillOpacity:0,dashArray:"6 7",opacity:.4}).addTo(autoLayer);
-    L.circleMarker([s.lat,s.lon],{radius:3,color:"#dc8ca6",
-      fillColor:"#6d2438",fillOpacity:.9,weight:1})
-    .bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.operator)||"—"} — ${esc(s.status)}
-      <br><span style="color:#8a90a2">OSM-mapped operating facility (context tier)</span>`)
-    .addTo(autoLayer);}
-  if(!AUTO.length) return;
-  const row=document.createElement("div"); row.className="row off";
-  row.innerHTML=`<span class="dot" style="background:#475569"></span>
-    <span>OSM-mapped facilities (auto)</span><span class="cnt">${AUTO.length}</span>`;
-  row.onclick=()=>{if(map.hasLayer(autoLayer)){map.removeLayer(autoLayer);row.classList.add("off");}
-    else{map.addLayer(autoLayer);row.classList.remove("off");}};
-  document.getElementById("sitelist").appendChild(row);
+function renderFeeds(){
+  const tb=document.querySelector("#feedtable tbody"); if(!tb||!LATEST) return;
+  const fs=[...(LATEST.feeds||[])].sort((a,b)=>(b.error?1:0)-(a.error?1:0)||b.customers-a.customers);
+  tb.innerHTML="";
+  for(const f of fs){
+    const tr=document.createElement("tr");
+    tr.innerHTML=f.error
+      ?`<td><span class="okdot errdot"></span>${esc(f.name)}</td>
+        <td colspan="2" class="err" title="${esc(f.error)}">${esc(f.error.slice(0,42))}</td>`
+      :`<td><span class="okdot"></span>${esc(f.name)}</td>
+        <td class="n">${f.outages}</td><td class="n">${fmt(f.customers)}</td>`;
+    tb.appendChild(tr);
+  }
+  const ok=(LATEST.feeds||[]).filter(f=>!f.error).length;
+  document.getElementById("feedpill").textContent=
+    `${ok}/${(LATEST.feeds||[]).length} feeds · ${fmt((LATEST.outages||[]).length)} outages`;
 }
-function renderWatch(){
-  const el=document.getElementById("watchlist"); if(!el) return;
-  const items=INFRA.filter(p=>p.type==="docket-watch");
-  if(!items.length){el.textContent="no tracked decisions yet";return;}
-  el.innerHTML=items.sort((a,b)=>String(a.decision_date).localeCompare(String(b.decision_date)))
-    .map(p=>`<div style="margin:6px 0"><b>${esc(p.decision_date||"TBD")}</b> — ${esc(p.name)}
-      <br><span class="meta">${esc(p.source)}</span></div>`).join("");
+function topEvents(){
+  const el=document.getElementById("topevents"); if(!el||!LATEST) return;
+  const top=[...(LATEST.outages||[])].sort((a,b)=>(b.customers||0)-(a.customers||0)).slice(0,7);
+  if(!top.length){el.textContent="quiet network";return;}
+  el.innerHTML=top.map(o=>`<div class="longrow" style="cursor:pointer"
+      onclick="map.setView([${o.lat},${o.lon}],12);document.querySelector('.tab[data-tab=live]').click()">
+    <span><span class="okdot" style="background:${cRaw(o)}"></span>${esc(o.region)}
+      ${o.dc_name?`· near ${esc(o.dc_name)}`:""}</span>
+    <b>${fmt(o.customers)}</b></div>`).join("");
 }
-function drawInfra(){
-  infraLayer.clearLayers();
-  for(const p of INFRA){
-    if(p.path&&p.path.length>1){
-      L.polyline(p.path,{color:"#f97316",weight:3,dashArray:"10 8",opacity:.8})
-        .bindPopup(`<b>⚡ ${esc(p.name)}</b><br>${esc(p.type)} — ${esc(p.status)}
-          <br><span style="color:#8a90a2;font-size:11px">${esc(p.source)}</span>`)
-        .addTo(infraLayer);
-      continue;
-    }
-    if(!p.lat) continue;
-    const col=p.status==="complete"?"#fbbf24":"#f97316";
-    L.circleMarker([p.lat,p.lon],{radius:6,color:col,fillColor:col,fillOpacity:.9,weight:2})
-      .bindPopup(`<b>⚡ ${esc(p.name)}</b><br>${esc(p.type)} — ${esc(p.status)}<br>
-        <span style="color:#8a90a2">${esc(p.territory||"")}</span>
-        <br><span style="color:#8a90a2;font-size:11px">${esc(p.source)}</span>`)
-      .addTo(infraLayer);}
-  if(!INFRA.length) return;
-  const row=document.createElement("div"); row.className="row";
-  row.innerHTML=`<span class="dot" style="background:#f97316"></span>
-    <span>Grid upgrade projects (⚡)</span><span class="cnt">${INFRA.length}</span>`;
-  row.onclick=()=>{if(map.hasLayer(infraLayer)){map.removeLayer(infraLayer);row.classList.add("off");}
-    else{map.addLayer(infraLayer);row.classList.add("on"),row.classList.remove("off");}};
-  document.getElementById("sitelist").appendChild(row);
+function regionChips(){
+  const el=document.getElementById("regionchips"); if(!el||!LATEST) return;
+  const regs=[...new Set((LATEST.feeds||[]).map(f=>f.name))].sort();
+  el.innerHTML="";
+  const mk=(label,fn,on)=>{const c=document.createElement("div");
+    c.className="chip"+(on?" on":"");c.textContent=label;c.onclick=fn;el.appendChild(c);return c;};
+  mk("all",()=>{activeRegions.clear();regionChips();plot();},!activeRegions.size);
+  for(const r of regs)
+    mk(r,()=>{activeRegions.has(r)?activeRegions.delete(r):activeRegions.add(r);
+      regionChips();plot();},activeRegions.has(r));
+}
+function renderStrain(){
+  const el=document.getElementById("straincard"),wrap=document.getElementById("strainwrap");
+  if(!el||!wrap) return;
+  if(!STRAIN||!(STRAIN.bas||[]).length){wrap.style.display="none";return;}
+  wrap.style.display="";
+  const rows=STRAIN.bas.map(b=>{
+    const hot=b.max48_pct>=100,warm=b.max48_pct>=98;
+    const col=hot?"var(--red)":warm?"var(--amber)":"var(--dim)";
+    return `<tr><td>${esc(b.ba)}</td>
+      <td class="n" style="color:${col}"><b>${b.max48_pct}%</b></td>
+      <td class="n">${b.hours_ge98}h</td><td class="n">${b.latest_pct}%</td></tr>`;}).join("");
+  el.innerHTML=`<table><thead><tr><th>grid</th><th class="n">48h peak</th>
+    <th class="n">≥98%</th><th class="n">latest</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="caveat">Actual demand vs day-ahead forecast (EIA-930). Sustained ≥98% is when
+    brownouts/conservation appeals happen — voltage-sag data itself is published nowhere.</div>`;
 }
 
-let PL_SUBS=[],PL_PLANTS=[],BACKBONE=[],FLOWS=null,NYFLOWS=null;
-function renderNYFlows(){
-  const el=document.getElementById("nyflowscard"), wrap=document.getElementById("nyflowswrap");
-  if(!el||!wrap) return;
-  if(!NYFLOWS||!(NYFLOWS.zones||[]).length){ wrap.style.display="none"; return; }
-  wrap.style.display="";
-  const hi=new Set(["WEST","CENTRL","GENESE"]);   // upstate DC country
-  const rows=NYFLOWS.zones.map(z=>`<tr${hi.has(z.zone)?' style="color:var(--accent)"':
-    z.zone==="N.Y.C."?' style="color:var(--red)"':''}>
-    <td>${esc(z.zone)}</td><td class="n">$${z.avg_lmp}</td>
-    <td class="n">$${z.avg_congestion}</td></tr>`).join("");
-  const h=(NYFLOWS.history||[]).filter(x=>x.nyc_minus_west!=null);
-  let trend="";
-  if(h.length>1){
-    const W=280,H=36,vals=h.map(x=>x.nyc_minus_west),
-          mx=Math.max(...vals),mn=Math.min(...vals),rg=(mx-mn)||1;
-    const pts=vals.map((v,i)=>`${(i/(vals.length-1))*W},${H-4-((v-mn)/rg)*(H-8)}`).join(" ");
-    trend=`<div class="meta" style="margin-top:6px">NYC−WEST spread, ${h.length} days:</div>
-      <svg width="${W}" height="${H}"><polyline points="${pts}" fill="none"
-        stroke="var(--accent)" stroke-width="1.5"/></svg>`;
-  }
-  el.innerHTML=`<div class="meta">day-ahead zonal LBMP, ${esc(NYFLOWS.day)}
-    ${NYFLOWS.nyc_minus_west!=null?`· <b>NYC − WEST spread: $${NYFLOWS.nyc_minus_west}/MWh</b>`:""}
-    — Zone WEST hosts Lake Mariner; cheap upstate power is why the AI campuses land there</div>
-    <table><thead><tr><th>zone</th><th class="n">avg LMP</th>
-    <th class="n">congestion</th></tr></thead><tbody>${rows}</tbody></table>${trend}
-    <div class="caveat">NYISO public data — freely redistributable, unlike PJM's.
-    The persistent spread is the price signal pulling load upstate.</div>`;
+/* ================= history ================= */
+function sparkline(){
+  const svg=document.getElementById("spark"); if(!svg||!INDEX.days) return;
+  const days=INDEX.days.slice(-14); if(!days.length) return;
+  const W=600,H=64,max=Math.max(...days.map(d=>d.customers||0),1);
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const bw=W/days.length;
+  svg.innerHTML=days.map((d,i)=>{
+    const h=Math.max(2,(d.customers||0)/max*(H-14));
+    return `<rect x="${i*bw+2}" y="${H-4-h}" width="${bw-4}" height="${h}" rx="2"
+      fill="url(#g)"><title>${d.date}: ${fmt(d.customers)} customers, ${d.unique} outages</title></rect>`;
+  }).join("")+`<defs><linearGradient id="g" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#f5a623"/><stop offset="1" stop-color="#ff7a45"/></linearGradient></defs>`;
+  const last=days[days.length-1];
+  document.getElementById("sparkmeta").textContent=
+    `peak ${fmt(max)} · latest day ${fmt(last.customers||0)} customers across ${last.unique} outages`;
 }
-let EIAD=null,STRAIN=null,NYF=null,DIGEST=null;
+function timeline(){
+  const el=document.getElementById("timeline"); if(!el||!INDEX.days) return;
+  const days=[...INDEX.days].slice(-14).reverse();
+  el.innerHTML=days.map(d=>`<div class="longrow"><span>${esc(d.date)}</span>
+    <span>${fmt(d.unique)} outages · ${d.unique?Math.round(100*d.fair/d.unique):0}% fair ·
+    ${fmt(d.customers)} cust</span></div>`).join("")||"—";
+}
+function renderDurations(){
+  const box=document.getElementById("durnote"),lg=document.getElementById("longest");
+  if(!box) return;
+  if(!DUR||!DUR.regions||!Object.keys(DUR.regions).length){
+    box.textContent="accumulating restoration data…"; return;}
+  box.textContent=DUR.note||"";
+  if(lg&&DUR.longest){
+    lg.innerHTML="<div style='margin-top:8px'>"+DUR.longest.slice(0,5).map(x=>
+      `<div class="longrow"><span>${esc(x.region)} · ${fmt(x.customers)} cust</span>
+       <b>${Math.round(x.minutes/60)}h ${Math.round(x.minutes%60)}m</b></div>`).join("")+"</div>";
+  }
+  const rt=document.querySelector("#reliatable tbody");
+  if(rt&&LATEST){
+    rt.innerHTML="";
+    const byReg={};
+    for(const o of (LATEST.outages||[])){
+      (byReg[o.region]=byReg[o.region]||{n:0,f:0});
+      byReg[o.region].n++; if(!o.weather_flag) byReg[o.region].f++;
+    }
+    const regs=new Set([...Object.keys(byReg),...Object.keys(DUR.regions||{})]);
+    [...regs].sort().forEach(r=>{
+      const b=byReg[r]||{n:0,f:0}, d=(DUR.regions||{})[r];
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${esc(r)}</td><td class="n">${b.n}</td>
+        <td class="n">${b.n?(100*b.f/b.n).toFixed(0)+"%":"—"}</td>
+        <td class="n">${d?Math.round(d.avg_min)+"m":"—"}</td>
+        <td class="n">${d?d.momentary_pct+"%":"—"}</td>`;
+      rt.appendChild(tr);});
+  }
+}
+function renderDigest(){
+  const el=document.getElementById("digestcard"); if(!el) return;
+  if(!DIGEST){el.parentElement.style.display="none";return;}
+  el.parentElement.style.display="";
+  el.innerHTML=`week ending <b>${esc(DIGEST.week_ending||"?")}</b> —
+    <b>${fmt(DIGEST.unique_outages||0)}</b> outages,
+    <b>${DIGEST.fair_pct!=null?DIGEST.fair_pct+"%":"—"}</b> fair-weather,
+    ${fmt(DIGEST.customers||0)} customers (${DIGEST.weather||0} weather vs ${DIGEST.fair||0} fair).`;
+}
+
+/* ================= evidence ================= */
+async function loadEvidence(days){
+  if(!INDEX.days) return;
+  const dates=INDEX.days.slice(-days).map(d=>d.date);
+  const recs=[];
+  await Promise.all(dates.map(async d=>{
+    try{
+      const t=await fetch(`data/history/${d}.ndjson`).then(r=>{if(!r.ok)throw 0;return r.text();});
+      for(const line of t.split("\n")) if(line.trim())
+        try{recs.push(JSON.parse(line));}catch(e){}
+    }catch(e){}
+  }));
+  const R=(LATEST&&LATEST.dc_radius_km)||8;
+  const controls=DCS.filter(s=>s.status==="control"&&s.lat);
+  const seen=new Set(); let aT=0,aF=0,cT=0,cF=0;
+  const bySite={};
+  for(const r of recs){
+    const key=`${r.region}|${r.outage_id}`;
+    if(seen.has(key)) continue; seen.add(key);
+    if(r.dc_flag||["construction","contested","announced"].includes(r.dc_status||"")){
+      aT++; if(!r.weather_flag) aF++;
+      if(r.dc_name){
+        (bySite[r.dc_name]=bySite[r.dc_name]||{n:0,f:0,last:""});
+        bySite[r.dc_name].n++;
+        if(!r.weather_flag) bySite[r.dc_name].f++;
+        if((r.polled_at||"")>bySite[r.dc_name].last) bySite[r.dc_name].last=r.polled_at||"";
+      }
+    } else if(controls.some(c=>hav(r.lat,r.lon,c.lat,c.lon)<=R)){
+      cT++; if(!r.weather_flag) cF++;
+    }
+  }
+  // verdict banner w/ Wilson intervals
+  const cmp=document.getElementById("ctl-compare");
+  const wilson=(f,n)=>{if(!n)return null;const p=f/n,z=1.96,d=1+z*z/n;
+    const c=(p+z*z/(2*n))/d,m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d;
+    return [Math.max(0,c-m),Math.min(1,c+m)];};
+  const pc=x=>(100*x).toFixed(0)+"%";
+  const a=wilson(aF,aT), c=wilson(cF,cT);
+  let verdict="accumulating — too little data to compare yet", sig=false;
+  if(a&&c){
+    const overlap=a[0]<=c[1]&&c[0]<=a[1];
+    sig=!overlap;
+    verdict=overlap
+      ?"intervals overlap: <b>not yet statistically distinguishable</b> — keep collecting"
+      :"intervals separate: <b>distinguishable at ~95% confidence</b>";
+  }
+  cmp.className="verdict "+(sig?"sig":"nosig");
+  cmp.innerHTML=`Fair-weather share — <b>active sites ${aT?pc(aF/aT):"—"}</b>
+    ${a?`[${pc(a[0])}–${pc(a[1])}]`:""} (${aF}/${aT})
+    vs <b>controls ${cT?pc(cF/cT):"—"}</b>
+    ${c?`[${pc(c[0])}–${pc(c[1])}]`:""} (${cF}/${cT}). ${verdict}.
+    <div class="caveat">95% Wilson intervals over ${days} days of unique incidents.
+    Matching shares mean "growth corridor", not "data center".</div>`;
+  // scorecard
+  const sc=document.getElementById("scorecard");
+  const actives=DCS.filter(s=>["construction","contested","announced"].includes(s.status)
+    &&!String(s.coverage||"").startsWith("context"));
+  sc.innerHTML=actives.map(s=>{
+    const b=bySite[s.name]||{n:0,f:0,last:""};
+    const badge=b.f>2?'<span class="badge b-red">watch</span>':
+                b.f>0?'<span class="badge b-amber">events</span>':
+                '<span class="badge b-green">quiet</span>';
+    return `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px">
+      <b style="font-size:12.5px">${esc(s.name)}</b>${badge}</div>
+      <div class="meta" style="margin:6px 0 2px">${esc(s.operator||"")} · ${esc(s.status)}</div>
+      <div style="font-size:12.5px">${b.n} outage${b.n===1?"":"s"} in ring ·
+        <b>${b.f}</b> fair-weather</div>
+      ${b.last?`<div class="meta">last: ${esc(b.last.slice(0,16))}Z</div>`:""}</div>`;
+  }).join("")||'<div class="meta">no active sites configured</div>';
+}
+
+/* ================= burden ================= */
 function renderNyiso(){
   const el=document.getElementById("nycard"),wrap=document.getElementById("nywrap");
   if(!el||!wrap) return;
@@ -565,48 +764,15 @@ function renderNyiso(){
   const rows=NYF.zones.map(z=>`<tr${z.zone==="WEST"?' style="color:var(--red)"':''}>
     <td>${esc(z.zone)}</td><td class="n">$${z.avg_lmp}</td>
     <td class="n">$${z.avg_congestion}</td></tr>`).join("");
-  const sp=NYF.nyc_minus_west!=null?NYF.nyc_minus_west:
-           (NYF.spread!=null?NYF.spread:null);
+  const sp=NYF.nyc_minus_west!=null?NYF.nyc_minus_west:(NYF.spread!=null?NYF.spread:null);
   el.innerHTML=`<div class="meta">Day-ahead zonal LBMP averages${NYF.day?", "+esc(String(NYF.day)):""}.
-    WEST (red) hosts TeraWulf Lake Mariner — cheap upstate power is WHY the
-    campus is there.${sp!=null?` <b>NYC − WEST spread: $${sp}/MWh</b>.`:""}
-    Source: NYISO public CSVs.</div>
-    <table><thead><tr><th>zone</th><th class="n">avg LBMP</th>
-    <th class="n">congestion</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-function renderDigest(){
-  const el=document.getElementById("digestcard");
-  if(!el) return;
-  if(!DIGEST){el.parentElement.style.display="none";return;}
-  el.parentElement.style.display="";
-  el.innerHTML=`week ending <b>${esc(DIGEST.week_ending||"?")}</b> —
-    <b>${fmt(DIGEST.unique_outages||0)}</b> outages,
-    <b>${DIGEST.fair_pct!=null?DIGEST.fair_pct+"%":"—"}</b> fair-weather,
-    ${fmt(DIGEST.customers||0)} customers affected
-    (${DIGEST.weather||0} weather vs ${DIGEST.fair||0} fair).`;
-}
-function renderStrain(){
-  const el=document.getElementById("straincard"), wrap=document.getElementById("strainwrap");
-  if(!el||!wrap) return;
-  if(!STRAIN||!(STRAIN.bas||[]).length){wrap.style.display="none";return;}
-  wrap.style.display="";
-  const rows=STRAIN.bas.map(b=>{
-    const hot=b.max48_pct>=100, warm=b.max48_pct>=98;
-    const col=hot?"var(--red)":warm?"var(--amber)":"var(--dim)";
-    return `<tr><td>${esc(b.ba)}</td>
-      <td class="n" style="color:${col}"><b>${b.max48_pct}%</b></td>
-      <td class="n">${b.hours_ge98}h</td>
-      <td class="n">${b.latest_pct}%</td></tr>`;}).join("");
-  el.innerHTML=`<div class="meta">Actual demand as % of day-ahead forecast (EIA-930,
-    public domain). Sustained ≥98% (amber) or over-forecast (red) is the condition
-    under which brownouts and conservation appeals happen — true voltage-sag data
-    is utility-internal and published nowhere. 48h window.</div>
-    <table><thead><tr><th>grid</th><th class="n">48h peak</th>
-    <th class="n">hrs ≥98%</th><th class="n">latest</th></tr></thead>
+    WEST (red) hosts TeraWulf Lake Mariner — cheap upstate power is WHY the campus is there.
+    ${sp!=null?`<b>NYC − WEST spread: $${sp}/MWh</b>.`:""}</div>
+    <table><thead><tr><th>zone</th><th class="n">LBMP</th><th class="n">congestion</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 function renderEia(){
-  const el=document.getElementById("eiacard"), wrap=document.getElementById("eiawrap");
+  const el=document.getElementById("eiacard"),wrap=document.getElementById("eiawrap");
   if(!el||!wrap) return;
   if(!EIAD||!(EIAD.zones||[]).length){wrap.style.display="none";return;}
   wrap.style.display="";
@@ -615,280 +781,65 @@ function renderEia(){
     z.zone==="DOM"?' style="color:var(--red)"':''}>
     <td>${esc(z.zone)}</td><td class="n">${fmt(z.avg_mw_7d)} MW</td>
     <td class="n">${z.delta_pct==null?"—":(z.delta_pct>0?"+":"")+z.delta_pct+"%"}</td></tr>`).join("");
-  el.innerHTML=`<div class="meta">7-day avg hourly demand by PJM subregion, vs prior 7 days.
-    DOM (red) = Data Center Alley zone; Ohio zones highlighted. Demand growth IS the
-    data-center load signal, measured directly. Source: US EIA-930, public domain.</div>
-    <table><thead><tr><th>zone</th><th class="n">avg demand</th>
-    <th class="n">wk/wk</th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML=`<div class="meta">7-day avg hourly demand by PJM subregion vs prior 7 days.
+    DOM (red) = Data Center Alley; Ohio zones highlighted. Demand growth IS the DC load signal.</div>
+    <table><thead><tr><th>zone</th><th class="n">avg demand</th><th class="n">wk/wk</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
 }
 function renderFlows(){
-  const el=document.getElementById("flowscard"), wrap=document.getElementById("flowswrap");
+  const el=document.getElementById("flowscard"),wrap=document.getElementById("flowswrap");
   if(!el||!wrap) return;
-  if(!FLOWS||!(FLOWS.zones||[]).length){ wrap.style.display="none"; return; }
+  if(!FLOWS||!(FLOWS.zones||[]).length){wrap.style.display="none";return;}
   wrap.style.display="";
   const oh=new Set(["ATSI","AEP","DAY","DEOK"]);
-  let rows=FLOWS.zones.map(z=>`<tr${oh.has(z.zone)?' style="color:var(--accent)"':
+  const rows=FLOWS.zones.map(z=>`<tr${oh.has(z.zone)?' style="color:var(--accent)"':
     z.zone==="DOM"?' style="color:var(--red)"':''}>
     <td>${esc(z.zone)}</td><td class="n">$${z.avg_lmp}</td>
     <td class="n">$${z.avg_congestion}</td></tr>`).join("");
-  el.innerHTML=`<div class="meta">day-ahead zonal LMP averages, ${esc(FLOWS.day)}
-    ${FLOWS.dom_minus_atsi!=null?`· <b>DOM − ATSI spread: $${FLOWS.dom_minus_atsi}/MWh</b>
-    (Dominion = Data Center Alley zone; Ohio zones highlighted)`:""}</div>
-    <table><thead><tr><th>zone</th><th class="n">avg LMP</th>
-    <th class="n">congestion</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="caveat">Electrons don't carry state names — prices do. Persistent
-    DOM premiums + congestion are how NoVA load pulls on the shared grid.
-    Full topology is CEII-restricted; map layers are OSM reconstructions.</div>`;
+  el.innerHTML=`<div class="meta">Day-ahead zonal LMP, ${esc(FLOWS.day||"")}
+    ${FLOWS.dom_minus_atsi!=null?`· <b>DOM − ATSI spread $${FLOWS.dom_minus_atsi}/MWh</b>`:""}</div>
+    <table><thead><tr><th>zone</th><th class="n">LMP</th><th class="n">congestion</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
 }
-const bbLayers={hi:L.layerGroup(),mid:L.layerGroup(),lo:L.layerGroup()};
-function drawBackbone(){
-  for(const k in bbLayers) bbLayers[k].clearLayers();
-  if(!BACKBONE.length) return;
-  const tier=v=>v>=700000?"hi":v>=450000?"mid":"lo";
-  const style={hi:{color:"#ef4444",weight:3.5,opacity:.75},
-               mid:{color:"#f97316",weight:2.5,opacity:.65},
-               lo:{color:"#eab308",weight:1.5,opacity:.5}};
-  const cnt={hi:0,mid:0,lo:0};
-  for(const l of BACKBONE) cnt[tier(l.v)]++;
-  const built={hi:false,mid:false,lo:false};
-  const build=k=>{ if(built[k]) return; built[k]=true;
-    for(const l of BACKBONE){ if(tier(l.v)!==k) continue;
-      L.polyline(l.geom,style[k])
-        .bindPopup(`<b>${esc(l.name)||"HV line"}</b><br>${Math.round(l.v/1000)} kV
-          ${l.operator?"· "+esc(l.operator):""}
-          <br><span style="color:#8a90a2;font-size:11px">OSM backbone layer</span>`)
-        .addTo(bbLayers[k]);}};
-  const list=document.getElementById("sitelist");
-  const defs=[["hi","765 kV backbone","#ef4444"],["mid","500 kV backbone","#f97316"],
-              ["lo","345 kV backbone","#eab308"]];
-  for(const [k,label,col] of defs){
-    if(!cnt[k]) continue;
-    const row=document.createElement("div"); row.className="row off";
-    row.innerHTML=`<span class="dot" style="background:${col}"></span>
-      <span>${label}</span><span class="cnt">${cnt[k]}</span>`;
-    row.onclick=()=>{if(map.hasLayer(bbLayers[k])){map.removeLayer(bbLayers[k]);row.classList.add("off");}
-      else{build(k);map.addLayer(bbLayers[k]);row.classList.remove("off");}};
-    list.appendChild(row);}
+function renderWatch(){
+  const el=document.getElementById("watchlist"); if(!el) return;
+  const items=INFRA.filter(p=>p.type==="docket-watch");
+  if(!items.length){el.textContent="no tracked decisions yet";return;}
+  el.innerHTML=items.sort((a,b)=>String(a.decision_date).localeCompare(String(b.decision_date)))
+    .map(p=>`<div class="longrow"><span><b>${esc(p.decision_date||"TBD")}</b> — ${esc(p.name)}</span></div>
+      <div class="meta" style="margin:-2px 0 8px">${esc(p.source||"")}</div>`).join("");
 }
-const subLayer=L.layerGroup(), plantLayer=L.layerGroup();
-function drawGridAssets(){
-  subLayer.clearLayers(); plantLayer.clearLayers();
-  const list=document.getElementById("sitelist");
-  let subsBuilt=false, plantsBuilt=false;
-  const buildSubs=()=>{ if(subsBuilt) return; subsBuilt=true;
-    for(const s of PL_SUBS){
-      const kv=parseInt(String(s.voltage).split(";")[0])||0;
-      L.circleMarker([s.lat,s.lon],{radius:4,color:"#fb923c",fillColor:"#7c2d12",
-        fillOpacity:.95,weight:1.5})
-        .bindPopup(`<b>⚡ ${esc(s.name)||"substation"}</b><br>
-          ${s.voltage?esc(String(s.voltage).replace(/000$/,""))+" kV · ":""}substation
-          ${s.operator?"<br>"+esc(s.operator):""}`)
-        .addTo(subLayer);}};
-  const buildPlants=()=>{ if(plantsBuilt) return; plantsBuilt=true;
-    for(const p of PL_PLANTS){
-      L.circleMarker([p.lat,p.lon],{radius:6,color:"#a78bfa",fillColor:"#4c1d95",
-        fillOpacity:.95,weight:2})
-        .bindPopup(`<b>🏭 ${esc(p.name)||"power plant"}</b><br>
-          ${esc(p.source)||"?"} ${p.output?"· "+esc(p.output):""}
-          ${p.operator?"<br>"+esc(p.operator):""}
-          <br><span style="color:#8a90a2;font-size:11px">generation near a DC site —
-          proximity to supply is often WHY the site was chosen</span>`)
-        .addTo(plantLayer);}};
-  if(PL_SUBS.length){
-    const row=document.createElement("div"); row.className="row off";
-    row.innerHTML=`<span class="dot" style="background:#fb923c"></span>
-      <span>Substations (OSM)</span><span class="cnt">${PL_SUBS.length}</span>`;
-    row.onclick=()=>{if(map.hasLayer(subLayer)){map.removeLayer(subLayer);row.classList.add("off");}
-      else{buildSubs();map.addLayer(subLayer);row.classList.remove("off");}};
-    list.appendChild(row);}
-  if(PL_PLANTS.length){
-    const row=document.createElement("div"); row.className="row off";
-    row.innerHTML=`<span class="dot" style="background:#a78bfa"></span>
-      <span>Power plants (OSM)</span><span class="cnt">${PL_PLANTS.length}</span>`;
-    row.onclick=()=>{if(map.hasLayer(plantLayer)){map.removeLayer(plantLayer);row.classList.add("off");}
-      else{buildPlants();map.addLayer(plantLayer);row.classList.remove("off");}};
-    list.appendChild(row);}
-}
-function drawPlines(){
-  plineLayer.clearLayers();
-  for(const l of PLINES){
-    const kv=parseInt(String(l.voltage).split(";")[0])||0;
-    const col=kv>=200000?"#e879f9":kv>=100000?"#fb923c":"#9ca3af";
-    L.polyline(l.geom,{color:col,weight:kv>=200000?3:2,opacity:.75})
-      .bindPopup(`<b>⚡ ${esc(l.name)||"transmission line"}</b><br>
-        ${l.voltage?esc(String(l.voltage).replace(/000$/,""))+" kV":"voltage unmapped"}
-        ${l.operator?" — "+esc(l.operator):""}<br>
-        <span style="color:#8a90a2;font-size:11px">OSM way/${l.id} — nearby ≠ feeding;
-        the interconnection docket names the actual feed</span>`)
-      .addTo(plineLayer);}
-  if(!PLINES.length) return;
-  const row=document.createElement("div"); row.className="row off";
-  row.innerHTML=`<span class="dot" style="background:#fb923c"></span>
-    <span>Transmission lines near sites (OSM)</span><span class="cnt">${PLINES.length}</span>`;
-  row.onclick=()=>{if(map.hasLayer(plineLayer)){map.removeLayer(plineLayer);row.classList.add("off");}
-    else{map.addLayer(plineLayer);row.classList.remove("off");}};
-  document.getElementById("sitelist").appendChild(row);
-}
-
-function dedupe(rs){const m=new Map();for(const r of rs)m.set(r.region+"|"+r.outage_id+"|"+r.lat+","+r.lon,r);return[...m.values()];}
-async function fetchDay(d){const r=await fetch(`data/history/${d}.ndjson`);
-  if(!r.ok)throw new Error("no history for "+d);
-  return (await r.text()).trim().split("\n").filter(Boolean).map(JSON.parse);}
-
-function evidence(records){
-  const uniq=dedupe(records);
-  const ACTIVE=new Set(["construction","contested","announced"]);
-  const polled=DCS.filter(s=>s.lat&&!isContext(s));
-  const real=polled.filter(s=>ACTIVE.has(s.status));
-  const other=polled.filter(s=>s.status==="control"||(s.status||"").startsWith("operating"));
-  let nearF=0,nearT=0,farF=0,farT=0;
-  const perSite=new Map(DCS.filter(s=>s.lat).map(s=>[s.name,{status:s.status,f:0,t:0}]));
-  for(const o of uniq){
-    const fair=!o.weather_flag; let inReal=false;
-    for(const s of real) if(hav(o.lat,o.lon,s.lat,s.lon)<=RADIUS){
-      inReal=true;const p=perSite.get(s.name);p.t++;if(fair)p.f++;}
-    for(const s of other) if(hav(o.lat,o.lon,s.lat,s.lon)<=RADIUS){
-      const p=perSite.get(s.name);p.t++;if(fair)p.f++;}
-    if(inReal){nearT++;if(fair)nearF++;}else{farT++;if(fair)farF++;}}
-  return {uniq:uniq.length,nearF,nearT,farF,farT,perSite};
-}
-async function loadEvidence(windowDays){
-  const days=(INDEX.days||[]).slice(-windowDays);
-  let all=[];
-  for(const d of days){try{all=all.concat(await fetchDay(d.date));}catch(e){}}
-  if(!all.length&&LATEST)all=LATEST.outages||[];
-  const label=days.length?`${days[0].date} → ${days[days.length-1].date}`:"latest only";
-  const ev=evidence(all);
-  const pct=(a,b)=>b?(100*a/b).toFixed(1)+"%":"—";
-  document.getElementById("kpi-near").textContent=pct(ev.nearF,ev.nearT);
-  document.getElementById("kpi-far").textContent=pct(ev.farF,ev.farT);
-  document.getElementById("kpi-n").textContent=ev.uniq;
-  const rEl=document.getElementById("kpi-ratio");
-  let verdict=`Window ${label}. Not enough in-ring outages yet — keep polling.`;
-  rEl.textContent="—"; rEl.className="big";
-  if(ev.nearT>=5&&ev.farT>=20&&ev.farF>0){
-    const ratio=(ev.nearF/ev.nearT)/(ev.farF/ev.farT);
-    rEl.textContent=ratio.toFixed(2)+"×";
-    rEl.className="big "+(ratio>1.5?"ratio-hot":ratio>1.1?"ratio-good":"");
-    verdict=`Window ${label}. `+(ratio>1.5
-      ?"Elevated. Check CONTROL sites, then pull PUCO reliability filings + interconnection dockets for the hot sites."
-      :ratio>1.1?"Mildly elevated — could be noise or corridor effect. Keep accumulating."
-      :"No elevation — the folk theory isn't showing up in reliability data. That's a finding too.");}
-  document.getElementById("ev-verdict").textContent=verdict;
-  const tb=document.querySelector("#sitetable tbody"); tb.innerHTML="";
-  const rows=[...ev.perSite.entries()].filter(([,p])=>p.t);
-  const ACTIVE2=new Set(["construction","contested","announced"]);
-  let aF=0,aT=0,cF=0,cT=0;
-  for(const [,p] of rows){
-    if(ACTIVE2.has(p.status)){aF+=p.f;aT+=p.t;}
-    if(p.status==="control"){cF+=p.f;cT+=p.t;}
-  }
-  const cmp=document.getElementById("ctl-compare");
-  if(cmp){
-    const wilson=(f,n)=>{if(!n)return null;const p=f/n,z=1.96,d=1+z*z/n;
-      const c=(p+z*z/(2*n))/d,m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d;
-      return [Math.max(0,c-m),Math.min(1,c+m)];};
-    const pc=x=>(100*x).toFixed(0)+"%";
-    const a=wilson(aF,aT), c=wilson(cF,cT);
-    let verdict="accumulating — too little data to compare yet";
-    if(a&&c){
-      const overlap=a[0]<=c[1]&&c[0]<=a[1];
-      verdict=overlap
-        ?"intervals overlap: <b>not yet statistically distinguishable</b> — keep collecting"
-        :"intervals separate: <b>distinguishable at ~95% confidence</b>";
-    }
-    cmp.innerHTML=`Fair-weather share — <b>active sites ${aT?pc(aF/aT):"—"}</b>
-      ${a?`[${pc(a[0])}–${pc(a[1])}]`:""} (${aF}/${aT})
-      vs <b>controls ${cT?pc(cF/cT):"—"}</b>
-      ${c?`[${pc(c[0])}–${pc(c[1])}]`:""} (${cF}/${cT}).
-      ${verdict}. 95% Wilson intervals; matching shares mean "growth corridor",
-      not "data center".`;
-  }
-  const order=s=>ACTIVE2.has(s)?0:s==="control"?1:2;
-  rows.sort((a,b)=>order(a[1].status)-order(b[1].status)||b[1].f-a[1].f)
-    .forEach(([name,p])=>{
-    const tr=document.createElement("tr");
-    if(p.status==="control") tr.style.color="var(--dim)";
-    tr.innerHTML=`<td>${esc(name.length>26?name.slice(0,25)+"…":name)}</td>
-      <td>${esc(p.status)}</td><td class="n">${p.f}</td><td class="n">${p.t}</td>`;
-    tb.appendChild(tr);});
-}
-function sparkline(){
-  const svg=document.getElementById("spark"); if(!svg||!INDEX.days) return;
-  const days=INDEX.days.slice(-14); if(!days.length) return;
-  const W=600,H=56,max=Math.max(...days.map(d=>d.customers||0),1);
-  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
-  const pts=days.map((d,i)=>`${(i/(days.length-1||1))*W},${H-4-((d.customers||0)/max)*(H-10)}`).join(" ");
-  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
-  const last=days[days.length-1];
-  document.getElementById("sparkmeta").textContent=
-    `peak ${fmt(max)} · latest day ${fmt(last.customers||0)} customers across ${last.unique} outages`;
-}
-function timeline(){
-  const el=document.getElementById("tl"); el.innerHTML="";
-  const days=(INDEX.days||[]).slice(-45);
-  if(!days.length){document.getElementById("tl-meta").textContent="no history yet";return;}
-  const mx=Math.max(...days.map(d=>d.unique||d.records||1),1);
-  for(const d of days){
-    const bar=document.createElement("div"); bar.className="bar";
-    const u=d.unique??d.records??0, f=d.fair??0, w=(d.weather??(u-f));
-    const fh=Math.round(60*f/mx), wh=Math.round(60*w/mx);
-    bar.innerHTML=`<div class="f" style="height:${fh}px"></div><div class="w" style="height:${wh}px"></div>`;
-    bar.title=`${d.date}: ${u} unique (${f} fair / ${w} weather)`;
-    bar.onclick=()=>{document.getElementById("daysel").value=d.date;loadHistDay(d.date);};
-    el.appendChild(bar);}
-}
-async function loadHistDay(date){
+function renderBurden(){
+  const el=document.getElementById("burdencard"); if(!el||!BURDEN) return;
   try{
-    const recs=await fetchDay(date), uniq=dedupe(recs);
-    plot(uniq, null, "");
-    document.getElementById("hist-meta").textContent=
-      `${uniq.length} unique outages on ${date} · ${recs.length} observations`;
-    const byHour=Array(24).fill(0);
-    for(const o of uniq)byHour[+(o.polled_at||"").slice(11,13)||0]++;
-    const mx=Math.max(...byHour,1);
-    document.getElementById("spark").innerHTML=
-      byHour.map(n=>`<div style="height:${Math.round(100*n/mx)}%" title="${n}"></div>`).join("");
-  }catch(e){document.getElementById("hist-meta").textContent=e.message;}
+    const arr=BURDEN.auctions||BURDEN.items||BURDEN.rows||[];
+    if(!arr.length){
+      el.innerHTML=`<pre style="white-space:pre-wrap;font-size:11.5px;color:var(--dim)">${
+        esc(JSON.stringify(BURDEN,null,1).slice(0,600))}</pre>`;
+      return;}
+    const max=Math.max(...arr.map(a=>+((a.price??a.price_mw_day??a.value)||0)),1);
+    el.innerHTML=arr.map(a=>{
+      const label=a.period||a.year||a.label||a.name||"?";
+      const price=+((a.price??a.price_mw_day??a.value)||0);
+      return `<div class="longrow"><span>${esc(label)}</span><b>$${fmt(price)}/MW-day</b></div>
+        <div class="statebar" style="width:${100*price/max}%;margin-bottom:6px"></div>`;
+    }).join("")+`<div class="caveat">PJM capacity auction clears — the cost-shift receipts.
+      ${esc(BURDEN.note||"")}</div>`;
+  }catch(e){el.textContent="—";}
 }
 
-document.getElementById("csv").onclick=()=>{
-  const rows=window._shown||[];
-  const cols=["polled_at","region","outage_id","lat","lon","customers","cause",
-    "crew_status","etr","wind_kmh","gust_kmh","precip_mm","temp_c","nws_alerts",
-    "dc_name","dc_km","classification","rationale"];
-  const csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>{
-    let v=r[c]==null?"":String(r[c]); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
-  }).join(","))).join("\n");
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=`gridwatch_${(LATEST.generated_at||"snapshot").slice(0,16)}.csv`; a.click();
-};
-
-document.querySelectorAll("#evwin .chip").forEach(c=>c.onclick=()=>{
-  document.querySelectorAll("#evwin .chip").forEach(x=>x.classList.remove("on"));
-  c.classList.add("on"); loadEvidence(+c.dataset.d);});
-
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  t.classList.add("active"); currentView=t.dataset.tab;
-  for(const id of["live","history","evidence","burden"])
-    document.getElementById("tab-"+id).style.display=t.dataset.tab===id?"":"none";
-  if(t.dataset.tab==="live"&&LATEST)
-    plot(LATEST.outages||[],document.getElementById("live-meta"),liveLabel());
-});
-
-setInterval(()=>{
+/* ================= data plumbing ================= */
+function ageTick(){
+  const dot=document.getElementById("agedot"),txt=document.getElementById("agetext");
   if(!LATEST||!LATEST.generated_at||LATEST.generated_at==="never"){
-    document.getElementById("refresh").textContent="no data yet";return;}
-  const age=Math.max(0,Math.round((Date.now()-Date.parse(LATEST.generated_at))/1000));
-  const m=Math.floor(age/60), el=document.getElementById("refresh");
-  el.textContent=m<1?"data <1m old":m<60?`data ${m}m old`:`data ${Math.floor(m/60)}h ${m%60}m old`;
-  el.style.color=m>45?"var(--red)":m>25?"var(--amber)":"var(--dim)";
-  el.title=m>45?"poller may be stalled — check Actions":m>25?"older than one poll cycle (CDN lag or delayed runner)":"fresh";
-},1000);
+    txt.textContent="no data yet";dot.className="sdot red";return;}
+  const m=Math.round((Date.now()-Date.parse(LATEST.generated_at))/60000);
+  txt.textContent=m<1?"data <1m old":`data ${m}m old`;
+  dot.className="sdot"+(m>45?" red":m>25?" amber":"");
+}
 async function refetchNow(){
-  const b=document.getElementById("refetch"); if(b){b.disabled=true;b.textContent="…";}
+  const b=document.getElementById("refetch");
+  if(b){b.disabled=true;b.textContent="…";}
   const prev=LATEST&&LATEST.generated_at;
   try{
     const host=location.hostname.split(".")[0];
@@ -901,154 +852,79 @@ async function refetchNow(){
       latest=await fetch("data/latest.json?t="+Date.now()).then(r=>r.json());
     }
     const changed=latest.generated_at!==prev;
-    LATEST=latest;
+    PREV=LATEST; LATEST=latest;
     if(b){b.textContent=changed?"✓ updated":"✓ no new poll yet";
       setTimeout(()=>{b.textContent="↻ refresh";b.disabled=false;},2200);}
-    renderFeeds();renderStates();renderClassbar();
-    if(currentView==="live")
-      plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
-    try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());timeline();}catch(e){}
-    try{renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json()));}catch(e){}
-  }catch(e){}
+    try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());}catch(e){}
+    try{DUR=await fetch("data/durations.json?t="+Date.now()).then(r=>r.json());}catch(e){}
+    try{DIGEST=await fetch("data/digest.json?t="+Date.now()).then(r=>r.json());}catch(e){}
+    plot();kpis();mixbar();renderFeeds();renderStates();topEvents();regionChips();
+    sparkline();timeline();renderDurations();renderDigest();ageTick();
+  }catch(e){
+    const eb=document.getElementById("errbanner");
+    eb.style.display="block";
+    eb.textContent="Couldn't reach the data feed — the site itself is up, but data/latest.json failed to load. It usually self-heals on the next poll.";
+  }
   if(b&&b.textContent==="…"){b.disabled=false;b.textContent="↻ refresh";}
 }
-async function refresh(){
-  await refetchNow();          // full re-render: map, feeds, durations, timeline
-  setTimeout(refresh,REFRESH_MS);
+async function refresh(){ await refetchNow(); setTimeout(refresh,REFRESH_MS); }
+
+function siteDeepLink(){
+  const m=location.hash.match(/site=([^&]+)/); if(!m) return;
+  const q=decodeURIComponent(m[1]).toLowerCase();
+  const s=DCS.find(x=>x.lat&&x.name.toLowerCase().includes(q));
+  if(s) map.setView([s.lat,s.lon],12);
 }
 
-async function boot(){
-  const [latest,dcs,auto,infra,plines]=await Promise.all([
-    fetch("data/latest.json").then(r=>r.json()),
-    fetch("data/datacenters.json").then(r=>r.json()).catch(()=>({sites:[]})),
-    fetch("data/datacenters_auto.json").then(r=>r.json()).catch(()=>({sites:[]})),
-    fetch("data/infrastructure.json").then(r=>r.json()).catch(()=>({projects:[]})),
-    fetch("data/powerlines.json").then(r=>r.json()).catch(()=>({lines:[]})),
-  ]);
-  LATEST=latest;DCS=dcs.sites||[];AUTO=auto.sites||[];INFRA=infra.projects||[];
-  PLINES=plines.lines||[];
-  PL_SUBS=plines.substations||[]; PL_PLANTS=plines.plants||[];
-  try{BACKBONE=(await fetch("data/backbone.json").then(r=>r.json())).lines||[];}catch(e){BACKBONE=[];}
+/* ================= boot ================= */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active"); currentView=t.dataset.tab;
+  for(const id of ["live","history","evidence","burden"])
+    document.getElementById("tab-"+id).style.display=id===currentView?"":"none";
+  if(currentView==="live") setTimeout(()=>map.invalidateSize(),60);
+});
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT") return;
+  if(e.key==="r") refetchNow();
+  const tabs=["live","history","evidence","burden"];
+  if(["1","2","3","4"].includes(e.key))
+    document.querySelector(`.tab[data-tab=${tabs[+e.key-1]}]`).click();
+});
+
+(async function boot(){
+  try{LATEST=await fetch("data/latest.json?t="+Date.now()).then(r=>r.json());}catch(e){}
+  try{INDEX=await fetch("data/history/index.json").then(r=>r.json());}catch(e){INDEX={};}
+  try{DUR=await fetch("data/durations.json").then(r=>r.json());}catch(e){}
+  try{DCS=(await fetch("data/datacenters.json").then(r=>r.json())).sites||[];}catch(e){}
+  try{AUTO=(await fetch("data/datacenters_auto.json").then(r=>r.json())).sites||[];}catch(e){}
+  try{INFRA=(await fetch("data/infrastructure.json").then(r=>r.json())).projects||[];}catch(e){}
+  try{BURDEN=await fetch("data/pjm_burden.json").then(r=>r.json());}catch(e){}
+  try{BACKBONE=(await fetch("data/backbone.json").then(r=>r.json())).lines||[];}catch(e){}
   try{const ga=await fetch("data/grid_assets.json").then(r=>r.json());
     if((ga.substations||[]).length){
-      PL_SUBS=ga.substations.map(s=>({id:"",name:s.n,operator:s.o,voltage:s.v?String(s.v):"",lat:s.lat,lon:s.lon}));
-      PL_PLANTS=ga.plants.map(p=>({id:"",name:p.n,operator:p.o,source:p.src,output:p.out,lat:p.lat,lon:p.lon}));
+      PL_SUBS=ga.substations.map(s=>({name:s.n,operator:s.o,voltage:s.v?String(s.v):"",lat:s.lat,lon:s.lon}));
+      PL_PLANTS=(ga.plants||[]).map(p=>({name:p.n,operator:p.o,source:p.src,output:p.out,lat:p.lat,lon:p.lon}));
     }}catch(e){}
-  try{FLOWS=await fetch("data/pjm_flows.json").then(r=>r.json());}catch(e){FLOWS=null;}
-  try{EIAD=await fetch("data/eia_demand.json").then(r=>r.json());}catch(e){EIAD=null;}
-  try{STRAIN=await fetch("data/eia_strain.json").then(r=>r.json());}catch(e){STRAIN=null;}
-  try{NYF=await fetch("data/nyiso_flows.json").then(r=>r.json());}catch(e){NYF=null;}
-  try{DIGEST=await fetch("data/digest.json").then(r=>r.json());}catch(e){DIGEST=null;}
-  try{NYFLOWS=await fetch("data/nyiso_flows.json?t="+Date.now()).then(r=>r.json());}catch(e){NYFLOWS=null;}
-  const fl=(latest.feeds||[]).filter(f=>!f.error).length;
-  if(fl) document.getElementById("tagline").innerHTML=
-    `outages &times; weather &times; data center proximity — ${fl} live utility feeds, Midwest&rarr;Atlantic`;
-  RADIUS=latest.dc_radius_km||8;
-  drawDCs();drawAuto();drawInfra();drawPlines();drawGridAssets();drawBackbone();drawRadar();regionChips();
-  siteDeepLink();window.addEventListener("hashchange",siteDeepLink);
-  renderFeeds();
-  const sf=document.getElementById("sitefilter");
-  if(sf) sf.oninput=()=>{const q=sf.value.toLowerCase();
-    document.querySelectorAll("#sitelist .row").forEach(r=>{
-      r.style.display=r.textContent.toLowerCase().includes(q)?"":"none";});};
-  const setAll=on=>{activeRegions.clear();
-    document.querySelectorAll("#regchips .chip").forEach(c=>{
-      const r=c.textContent; if(on){activeRegions.add(r);c.classList.add("on");}
-      else c.classList.remove("on");});
-    if(!on) activeRegions.add("__none__");   // empty set means "show all"
-    plot(LATEST.outages||[],document.getElementById("live-meta"),liveLabel());};
-  const ra=document.getElementById("reg-all"),rn=document.getElementById("reg-none");
-  if(ra) ra.onclick=()=>setAll(true);
-  if(rn) rn.onclick=()=>setAll(false);
-  plot(latest.outages||[],document.getElementById("live-meta"),liveLabel());
-  try{INDEX=await fetch("data/history/index.json?t="+Date.now()).then(r=>r.json());}
-  catch(e){INDEX={days:[]};}
-  if(!INDEX.days.length&&latest.generated_at&&latest.generated_at!=="never")
-    INDEX.days=[{date:latest.generated_at.slice(0,10),records:latest.count,
-                 unique:latest.count,fair:0,weather:0}];
-  document.getElementById("daysel").innerHTML=INDEX.days.slice().reverse()
-    .map(d=>`<option value="${d.date}">${d.date} (${d.unique??d.records})</option>`).join("")
-    ||"<option>— none —</option>";
-  document.getElementById("loadday").onclick=()=>loadHistDay(document.getElementById("daysel").value);
-  timeline();sparkline();renderStates();renderClassbar();renderWatch();renderFlows();renderEia();renderStrain();renderNyiso();renderDigest();renderNYFlows();
+  if(!PL_SUBS.length){
+    try{const pl=await fetch("data/powerlines.json").then(r=>r.json());
+      PL_SUBS=pl.substations||[];PL_PLANTS=pl.plants||[];}catch(e){}}
+  try{FLOWS=await fetch("data/pjm_flows.json").then(r=>r.json());}catch(e){}
+  try{EIAD=await fetch("data/eia_demand.json").then(r=>r.json());}catch(e){}
+  try{STRAIN=await fetch("data/eia_strain.json").then(r=>r.json());}catch(e){}
+  try{NYF=await fetch("data/nyiso_flows.json").then(r=>r.json());}catch(e){}
+  try{DIGEST=await fetch("data/digest.json").then(r=>r.json());}catch(e){}
+
+  drawDCs();drawInfra();buildSideRows();wireRadar();
+  plot();kpis();mixbar();renderFeeds();renderStates();topEvents();regionChips();
+  sparkline();timeline();renderDurations();renderDigest();
+  renderStrain();renderNyiso();renderEia();renderFlows();renderWatch();renderBurden();
   loadEvidence(30);
-  const rb=document.getElementById("refetch"); if(rb) rb.onclick=refetchNow;
-  try{ renderDurations(await fetch("data/durations.json?t="+Date.now()).then(r=>r.json())); }catch(e){}
-  try{ renderBurden(await fetch("data/pjm_burden.json").then(r=>r.json())); }catch(e){}
+  ageTick();setInterval(ageTick,30000);
+  siteDeepLink();window.addEventListener("hashchange",siteDeepLink);
   setTimeout(refresh,REFRESH_MS);
-}
-function renderDurations(D){
-  const tb=document.querySelector("#durtable tbody"); if(!tb) return; tb.innerHTML="";
-  const regs=Object.entries(D.regions||{}).sort((a,b)=>b[1].resolved-a[1].resolved);
-  if(!regs.length){document.getElementById("durnote").textContent="No resolved incidents in window yet.";return;}
-  for(const [name,r] of regs){
-    const tr=document.createElement("tr");
-    const hrs=r.avg_min>=90?` (${(r.avg_min/60).toFixed(1)}h)`:"";
-    tr.innerHTML=`<td>${esc(name)}</td>
-      <td class="n">${r.avg_min}${hrs}</td>
-      <td class="n">${r.median_min}</td>
-      <td class="n">${r.momentary} · ${r.momentary_pct}%</td>`;
-    tb.appendChild(tr);
-  }
-  document.getElementById("durnote").textContent=D.note||"";
-  const all=Object.values(D.regions||{});
-  if(all.length){
-    const tot=all.reduce((a,r)=>a+r.resolved,0);
-    const avg=all.reduce((a,r)=>a+r.avg_min*r.resolved,0)/Math.max(tot,1);
-    document.getElementById("dur-avg").textContent=Math.round(avg)+"m";
-  }
-  const lg=(D.longest||[])[0];
-  if(lg) document.getElementById("dur-max").textContent=
-    (lg.minutes>=120?(lg.minutes/60).toFixed(1)+"h":lg.minutes+"m");
-  const rt=document.querySelector("#reliatable tbody");
-  if(rt){
-    rt.innerHTML="";
-    const byReg={};
-    for(const o of (LATEST.outages||[])){
-      (byReg[o.region]=byReg[o.region]||{n:0,f:0});
-      byReg[o.region].n++; if(!o.weather_flag) byReg[o.region].f++;
-    }
-    const regs=new Set([...Object.keys(byReg),...Object.keys(D.regions||{})]);
-    [...regs].sort().forEach(r=>{
-      const b=byReg[r]||{n:0,f:0}, d=(D.regions||{})[r];
-      const tr=document.createElement("tr");
-      tr.innerHTML=`<td>${esc(r)}</td><td class="n">${b.n}</td>
-        <td class="n">${b.n?(100*b.f/b.n).toFixed(0)+"%":"—"}</td>
-        <td class="n">${d?Math.round(d.avg_min)+"m":"—"}</td>
-        <td class="n">${d?d.momentary_pct+"%":"—"}</td>`;
-      rt.appendChild(tr);});
-  }
-  const box=document.getElementById("durnote");
-  if((D.longest||[]).length)
-    box.innerHTML=(D.note||"")+"<br><b>Longest resolved:</b> "+
-      D.longest.map(l=>`${esc(l.region)} ${l.minutes>=120?(l.minutes/60).toFixed(1)+"h":l.minutes+"m"} (${l.customers} cust)`).join(" · ");
-}
-function renderBurden(B){
-  const a=B.auctions||[]; if(!a.length) return;
-  const first=a[0].rto, last=a[a.length-1].rto;
-  document.getElementById("b-mult").textContent="~"+Math.round(last/first)+"×";
-  document.getElementById("b-oh").textContent="$"+B.kpis.oh_monthly_bill_impact_usd;
-  document.getElementById("b-dc").textContent=Math.round(100*B.kpis.dc_share_of_2526_increase)+"%";
-  document.getElementById("b-tx").textContent="$"+B.kpis.dc_transmission_subsidy_usd_b+"B";
-  const mx=Math.max(...a.map(x=>x.dom||x.rto));
-  const ch=document.getElementById("bchart"); ch.innerHTML="";
-  for(const x of a){
-    const col=document.createElement("div");
-    col.style.cssText="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px";
-    const h=Math.max(4,Math.round(96*x.rto/mx));
-    const domh=x.dom?Math.max(4,Math.round(96*x.dom/mx)):0;
-    col.innerHTML=`<div style="display:flex;gap:3px;align-items:flex-end;height:96px">
-      <div title="RTO ${x.rto}" style="width:22px;height:${h}px;background:var(--blue);border-radius:3px 3px 0 0"></div>
-      ${x.dom?`<div title="Dominion ${x.dom}" style="width:22px;height:${domh}px;background:var(--red);border-radius:3px 3px 0 0"></div>`:""}
-    </div><div class="meta" style="font-size:10.5px">${x.dy}${x.capped?" (cap)":""}</div>`;
-    ch.appendChild(col);}
-  document.getElementById("bnotes").innerHTML=
-    "blue = RTO-wide, red = Dominion (NoVA) zone.<br>"+a.map(x=>`<b>${x.dy}</b>: ${esc(x.note)}`).join("<br>");
-  document.getElementById("bmech").innerHTML=(B.mechanisms||[]).map(m=>"&bull; "+esc(m)).join("<br>");
-  document.getElementById("bcounter").textContent=B.counterpoint||"";
-  document.getElementById("bsrc").innerHTML="<b>Sources:</b> "+(B.sources||[]).map(esc).join(" · ");
-}
-boot().catch(e=>{document.getElementById("live-meta").textContent="failed to load: "+e;});
+  document.getElementById("boot").classList.add("hide");
+})();
 </script>
 </body>
 </html>
