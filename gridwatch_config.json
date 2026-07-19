@@ -369,6 +369,50 @@
         "east": -71.05,
         "north": 42.05
       }
+    },
+    {
+      "name": "IN-IM",
+      "entry": "https://outagemap.indianamichiganpower.com/",
+      "instance_id": "e07a4ffb-83dd-4251-8dad-3fe5a26979b6",
+      "view_id": "1b319a36-d1cf-443d-9ecf-6267acae0c3a",
+      "kubra_layer": "cluster-1",
+      "max_tiles": 30000,
+      "_note": "Indiana Michigan Power (AEP) \u2014 northern/eastern IN + SW Michigan",
+      "bbox": {
+        "west": -87.6,
+        "south": 40.2,
+        "east": -84.7,
+        "north": 42.5
+      }
+    },
+    {
+      "name": "KY-AEP",
+      "entry": "https://outagemap.kentuckypower.com/",
+      "instance_id": "23dcd38e-2573-4e20-a463-959b11cae011",
+      "view_id": "60f31606-5702-4a1e-a74c-08d866b7a6fa",
+      "kubra_layer": "cluster-2",
+      "max_tiles": 30000,
+      "_note": "Kentucky Power (AEP) \u2014 eastern KY incl. TeraWulf Muskie corridor",
+      "bbox": {
+        "west": -84.2,
+        "south": 36.5,
+        "east": -81.9,
+        "north": 38.8
+      }
+    },
+    {
+      "name": "GA-GPC",
+      "entry": "https://outagemap.georgiapower.com/",
+      "instance_id": "7b38c047-7950-444b-a25c-9b3e5ab986eb",
+      "view_id": "67b44af5-3847-4ca3-9f4e-9190aac343d6",
+      "max_tiles": 30000,
+      "_note": "Georgia Power (Southern Co) on KUBRA \u2014 layer auto-detects first poll; pin from log",
+      "bbox": {
+        "west": -85.7,
+        "south": 30.6,
+        "east": -80.7,
+        "north": 35.1
+      }
     }
   ],
   "tile_workers": 8,
