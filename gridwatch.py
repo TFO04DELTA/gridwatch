@@ -1789,6 +1789,227 @@ def fetch_nyiso_lmps(cfg, out_path):
     return True
 
 
+def _haversine_km(a, b, c, d):
+    from math import radians, sin, cos, asin, sqrt
+    dl, dn = radians(c - a), radians(d - b)
+    x = (sin(dl / 2) ** 2
+         + cos(radians(a)) * cos(radians(c)) * sin(dn / 2) ** 2)
+    return 2 * 6371 * asin(sqrt(x))
+
+
+def fetch_nws_alerts(cfg, regions, out_path):
+    """Active NWS alerts as a GeoJSON polygon layer (keyless, public domain).
+    Already used per-outage for classification; as a visible overlay it lets a
+    user SEE the storm boundary against the outage dots — a live audit of the
+    weather classifier, complementary to the radar. Bounds the query to the
+    union of region bboxes so we don't pull the whole country."""
+    import requests as rq
+    lats = [b for r in regions if (b := r.get("bbox"))]
+    if not lats:
+        return False
+    south = min(b["south"] for b in lats); north = max(b["north"] for b in lats)
+    west = min(b["west"] for b in lats);  east = max(b["east"] for b in lats)
+    url = ("https://api.weather.gov/alerts/active?status=actual"
+           f"&message_type=alert&region_type=land")
+    try:
+        r = rq.get(url, timeout=45,
+                   headers={"User-Agent": cfg.get("nws_user_agent",
+                                                  "GRIDWATCH"),
+                            "Accept": "application/geo+json"})
+        r.raise_for_status()
+        gj = r.json()
+    except Exception as e:
+        print(f"[!] NWS alerts failed (non-fatal): {e}")
+        return False
+    KEEP = ("Warning", "Watch", "Emergency")
+    feats = []
+    for f in gj.get("features", []):
+        pr = f.get("properties", {}) or {}
+        ev = pr.get("event", "")
+        if not any(k in ev for k in KEEP):
+            continue
+        geom = f.get("geometry")
+        if not geom:
+            continue
+        # crude bbox filter on the first coordinate
+        try:
+            c = geom["coordinates"]
+            while isinstance(c[0], list):
+                c = c[0]
+            lo, la = c[0], c[1]
+            if not (west - 1 <= lo <= east + 1 and south - 1 <= la <= north + 1):
+                continue
+        except Exception:
+            pass
+        feats.append({"type": "Feature", "geometry": geom,
+                      "properties": {"event": ev,
+                                     "severity": pr.get("severity", ""),
+                                     "headline": (pr.get("headline")
+                                                  or "")[:140],
+                                     "ends": pr.get("ends", "")}})
+    with open(out_path, "w") as f:
+        json.dump({"type": "FeatureCollection", "features": feats},
+                  f, separators=(",", ":"))
+    print(f"[i] NWS alerts: {len(feats)} active warnings/watches -> {out_path}")
+    return True
+
+
+def fetch_eia_retirements(cfg, out_path, sites):
+    """EIA-860M: retired + planned-retirement generators with coordinates.
+    The dead-plant -> data-center pattern (Homer City, Somerset, Fort Martin)
+    is a repeating mechanism — campuses reuse a retired plant's interconnection
+    rights. This layer names it. Public domain. Flags plants within ~15km of a
+    tracked site. Refreshed monthly (EIA-860M updates monthly)."""
+    key = os.environ.get("EIA_API_KEY")
+    if not key:
+        print("[i] EIA-860 retirements: no EIA_API_KEY — skipping")
+        return False
+    import requests as rq
+    plants = []
+    for phase, status in (("retired", "RE"), ("planned", "OP")):
+        params = [("api_key", key), ("frequency", "monthly"),
+                  ("data[0]", "nameplate-capacity-mw"),
+                  ("sort[0][column]", "period"), ("sort[0][direction]", "desc"),
+                  ("length", 5000)]
+        # retired units carry a retirement date; planned carry planned dates
+        try:
+            r = rq.get("https://api.eia.gov/v2/electricity/operating-"
+                       "generator-capacity/data/", params=params, timeout=90)
+            r.raise_for_status()
+            rows = (r.json().get("response") or {}).get("data") or []
+        except Exception as e:
+            print(f"[!] EIA-860 {phase} failed (non-fatal): {e}")
+            continue
+        for row in rows:
+            st = str(row.get("statusDescription")
+                     or row.get("status") or "")
+            retiring = ("retir" in st.lower()
+                        or row.get("planned-retirement-year"))
+            if phase == "retired" and "retir" not in st.lower():
+                continue
+            if phase == "planned" and not retiring:
+                continue
+            try:
+                la = float(row.get("latitude"))
+                lo = float(row.get("longitude"))
+            except (TypeError, ValueError):
+                continue
+            try:
+                mw = float(row.get("nameplate-capacity-mw") or 0)
+            except (TypeError, ValueError):
+                mw = 0
+            plants.append({"name": row.get("plantName") or row.get("plantid"),
+                           "lat": round(la, 4), "lon": round(lo, 4),
+                           "mw": round(mw), "fuel": row.get("energy-source-desc")
+                           or row.get("technology") or "",
+                           "status": st, "phase": phase,
+                           "period": row.get("period", "")})
+        time.sleep(1)
+    # dedup by name+coords, keep highest MW
+    uniq = {}
+    for p in plants:
+        k = (p["name"], p["lat"], p["lon"])
+        if k not in uniq or p["mw"] > uniq[k]["mw"]:
+            uniq[k] = p
+    plants = list(uniq.values())
+    # flag proximity to tracked active/operating sites
+    tracked = [s for s in sites if s.get("lat")]
+    def near(p):
+        best = None
+        for s in tracked:
+            d = _haversine_km(p["lat"], p["lon"], s["lat"], s["lon"])
+            if d <= 15 and (best is None or d < best[1]):
+                best = (s["name"], round(d, 1))
+        return best
+    for p in plants:
+        n = near(p)
+        if n:
+            p["near_site"], p["near_km"] = n
+    flagged = sum(1 for p in plants if p.get("near_site"))
+    with open(out_path, "w") as f:
+        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(
+                       timespec="seconds"),
+                   "source": "EIA-860M (US public domain)",
+                   "plants": plants}, f, separators=(",", ":"))
+    print(f"[i] EIA-860 retirements: {len(plants)} plants "
+          f"({flagged} within 15km of a tracked site) -> {out_path}")
+    return bool(plants)
+
+
+def fetch_pjm_queue(cfg, out_path, sites):
+    """PJM interconnection queue (public) — every grid-connection request with
+    location, MW, fuel, and status. The FORWARD-LOOKING signal: a data center's
+    connection request is filed here, often before construction is visible.
+    We flag requests within ~15km of a tracked site. This is the piece that
+    turns GRIDWATCH from reactor into predictor.
+
+    PJM's public planning queue is served as JSON from their DataViewer /
+    planning API. If the endpoint shape drifts, this logs and skips (non-fatal);
+    the URL is overridable via cfg['pjm_queue_url']."""
+    import requests as rq
+    url = cfg.get("pjm_queue_url",
+                  "https://www.pjm.com/pub/planning/downloads/xml/"
+                  "PlanningQueues.json")
+    try:
+        r = rq.get(url, timeout=90,
+                   headers={"User-Agent": cfg.get("nws_user_agent",
+                                                  "GRIDWATCH")})
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print(f"[i] PJM queue: {e} (non-fatal; set cfg['pjm_queue_url'] to the "
+              f"current PlanningQueues JSON if PJM moved it)")
+        return False
+    rows = data if isinstance(data, list) else (
+        data.get("queues") or data.get("data") or data.get("items") or [])
+    tracked = [s for s in sites if s.get("lat")]
+    def coordf(row, *names):
+        for n in names:
+            v = row.get(n)
+            if v not in (None, ""):
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    pass
+        return None
+    reqs = []
+    for row in rows:
+        la = coordf(row, "latitude", "Latitude", "lat")
+        lo = coordf(row, "longitude", "Longitude", "lon", "long")
+        if la is None or lo is None:
+            continue
+        try:
+            mw = float(row.get("mfo") or row.get("mw") or
+                       row.get("capacity") or row.get("MW") or 0)
+        except (TypeError, ValueError):
+            mw = 0
+        fuel = (row.get("fuel") or row.get("Fuel")
+                or row.get("type") or "").lower()
+        status = row.get("status") or row.get("Status") or ""
+        name = (row.get("name") or row.get("projectName")
+                or row.get("queueNumber") or row.get("Queue") or "?")
+        best = None
+        for s in tracked:
+            d = _haversine_km(la, lo, s["lat"], s["lon"])
+            if d <= 15 and (best is None or d < best[1]):
+                best = (s["name"], round(d, 1))
+        if not best:
+            continue           # only keep queue points near a tracked site
+        reqs.append({"name": name, "lat": round(la, 4), "lon": round(lo, 4),
+                     "mw": round(mw), "fuel": fuel, "status": status,
+                     "near_site": best[0], "near_km": best[1],
+                     "state": row.get("state") or row.get("State") or ""})
+    reqs.sort(key=lambda x: -x["mw"])
+    with open(out_path, "w") as f:
+        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(
+                       timespec="seconds"),
+                   "source": "PJM planning queue (public)",
+                   "requests": reqs}, f, separators=(",", ":"))
+    print(f"[i] PJM queue: {len(reqs)} requests within 15km of a tracked site "
+          f"-> {out_path}")
+    return True
+
+
 def fetch_eia_demand(cfg, out_path):
     """Daily EIA-930 pull: hourly demand by PJM subregion, trailing 14 days,
     7d-vs-prior-7d per zone. US-government public-domain data — clean to
@@ -2136,6 +2357,14 @@ def cmd_poll(cfg, emit_dir=None, no_db=False):
         ed_path = os.path.join(emit_dir, "eia_demand.json")
         if _auto_layer_stale(ed_path, max_age_hours=24):
             fetch_eia_demand(cfg, ed_path)
+        ret_path = os.path.join(emit_dir, "retirements.json")
+        if _auto_layer_stale(ret_path, max_age_hours=24*14):
+            fetch_eia_retirements(cfg, ret_path, sites)
+        q_path = os.path.join(emit_dir, "queue.json")
+        if _auto_layer_stale(q_path, max_age_hours=24*7):
+            fetch_pjm_queue(cfg, q_path, sites)
+        al_path = os.path.join(emit_dir, "alerts.geojson")
+        fetch_nws_alerts(cfg, regions, al_path)   # every poll; it's cheap+live
         es_path = os.path.join(emit_dir, "eia_strain.json")
         if _auto_layer_stale(es_path, max_age_hours=6):
             fetch_eia_strain(cfg, es_path)
