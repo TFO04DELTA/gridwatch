@@ -633,7 +633,8 @@ class DukeAPI(Kubra):
             "User-Agent": IFactor.BROWSER_UA,
         }
         token = (os.environ.get("DUKE_BASIC_TOKEN")
-                 or self.region.get("basic_token"))
+                 or self.region.get("basic_token")
+                 or getattr(DukeAPI, "_recovered_token", None))
         if token:
             token = token.strip()
             if not token.lower().startswith("basic "):
@@ -666,6 +667,95 @@ class DukeAPI(Kubra):
         except requests.RequestException as e:
             print(f"[!] [{self.region['name']}] basic-auth retry failed: {e}")
             return None
+
+    def _discover_token(self, url):
+        """Duke rotates the Basic credential their public map uses. It ships
+        client-side, so on a 401 we re-derive it exactly the way it was first
+        captured: pull the map page, scan same-host JS bundles for either a
+        literal 'Basic <b64>' or a consumer key/secret pair, verify the
+        candidate against the API, adopt it, and log the fresh value so the
+        DUKE_BASIC_TOKEN secret can be re-pinned. Cached for the whole poll."""
+        import base64, re as _re
+        if getattr(DukeAPI, "_recovery_failed", False):
+            return None
+        name = self.region["name"]
+        entry = "https://outagemap.duke-energy.com/"
+        candidates = []
+        # 1) config-style JSON guesses (schema seen in the original capture)
+        for cu in filter(None, [self.region.get("config_url"),
+                                entry + "config/config.json",
+                                entry + "assets/config/config.json"]):
+            try:
+                cj = self.s.get(cu, timeout=20).json()
+                flat = json.dumps(cj)
+                keys = _re.findall(r'"[^"]*consumer[_a-z]*key[^"]*"\s*:\s*"([^"]+)"',
+                                   flat, _re.I)
+                secs = _re.findall(r'"[^"]*consumer[_a-z]*secret[^"]*"\s*:\s*"([^"]+)"',
+                                   flat, _re.I)
+                for k, s2 in zip(keys, secs):
+                    candidates.append(base64.b64encode(
+                        f"{k}:{s2}".encode()).decode())
+            except Exception:
+                pass
+        # 2) bundle scan
+        try:
+            html = self.s.get(entry, timeout=25,
+                              headers={"User-Agent": IFactor.BROWSER_UA}).text
+            srcs = _re.findall(r'src=["\']([^"\']+\.js[^"\']*)', html)
+            urls = []
+            for u in srcs:
+                if u.startswith("//"):
+                    u = "https:" + u
+                elif u.startswith("/"):
+                    u = entry.rstrip("/") + u
+                elif not u.startswith("http"):
+                    u = entry + u
+                if "duke-energy" in u:
+                    urls.append(u)
+            for bu in urls[:8]:
+                try:
+                    js = self.s.get(bu, timeout=25,
+                                    headers={"User-Agent":
+                                             IFactor.BROWSER_UA}).text
+                except Exception:
+                    continue
+                candidates += _re.findall(r'Basic\s+([A-Za-z0-9+/=]{24,})', js)
+                keys = _re.findall(
+                    r'consumer[_A-Za-z]*[Kk]ey["\']?\s*[:=]\s*["\']([^"\']{8,80})',
+                    js)
+                secs = _re.findall(
+                    r'consumer[_A-Za-z]*[Ss]ecret["\']?\s*[:=]\s*["\']([^"\']{8,80})',
+                    js)
+                for k, s2 in zip(keys, secs):
+                    candidates.append(base64.b64encode(
+                        f"{k}:{s2}".encode()).decode())
+                if candidates:
+                    break
+        except Exception as e:
+            print(f"[!] [{name}] bundle scan failed: {e}")
+        # verify candidates against the API
+        seen = set()
+        for tok in candidates:
+            if tok in seen:
+                continue
+            seen.add(tok)
+            try:
+                r = self.s.get(url, timeout=30,
+                               headers={**self._headers(),
+                                        "Authorization": f"Basic {tok}"})
+                if r.status_code == 200:
+                    DukeAPI._recovered_token = f"Basic {tok}"
+                    self.s.headers["Authorization"] = f"Basic {tok}"
+                    print(f"[i] [{name}] Duke token AUTO-RECOVERED from their "
+                          f"client bundle. Pin it: set repo secret "
+                          f"DUKE_BASIC_TOKEN to: Basic {tok}")
+                    return r
+            except requests.RequestException:
+                continue
+        DukeAPI._recovery_failed = True
+        print(f"[!] [{name}] token auto-recovery found "
+              f"{len(seen)} candidates, none accepted")
+        return None
 
     @staticmethod
     def _pick(d, *names):
@@ -710,10 +800,14 @@ class DukeAPI(Kubra):
                       f"{r.status_code}; trying config-based auth")
                 r2 = self._basic_auth_retry(url)
                 if r2 is None:
+                    r2 = self._discover_token(url)
+                if r2 is None:
                     raise RuntimeError(
-                        f"{r.status_code} from Duke API (no usable auth). If "
-                        f"this is a datacenter-IP block, poll Duke from a "
-                        f"residential IP and push results.")
+                        f"{r.status_code} from Duke API — token likely "
+                        f"rotated and auto-recovery failed. Recapture: "
+                        f"outagemap.duke-energy.com > DevTools > Network > "
+                        f"the 'outages?jurisdiction=' request > Authorization "
+                        f"header > update secret DUKE_BASIC_TOKEN.")
                 r = r2
             else:
                 r.raise_for_status()
