@@ -937,14 +937,21 @@ function renderBurden(){
       el.innerHTML=`<pre style="white-space:pre-wrap;font-size:11.5px;color:var(--dim)">${
         esc(JSON.stringify(BURDEN,null,1).slice(0,600))}</pre>`;
       return;}
-    const max=Math.max(...arr.map(a=>+((a.price??a.price_mw_day??a.value)||0)),1);
+    const price=a=>+((a.rto??a.price??a.price_mw_day??a.value)||0);
+    const label=a=>a.dy||a.period||a.year||a.label||a.name||"?";
+    const max=Math.max(...arr.map(price),1);
     el.innerHTML=arr.map(a=>{
-      const label=a.period||a.year||a.label||a.name||"?";
-      const price=+((a.price??a.price_mw_day??a.value)||0);
-      return `<div class="longrow"><span>${esc(label)}</span><b>$${fmt(price)}/MW-day</b></div>
-        <div class="statebar" style="width:${100*price/max}%;margin-bottom:6px"></div>`;
-    }).join("")+`<div class="caveat">PJM capacity auction clears — the cost-shift receipts.
-      ${esc(BURDEN.note||"")}</div>`;
+      const p=price(a), capped=a.capped?' <span class="badge b-amber">capped</span>':"";
+      const dom=a.dom?` · DOM $${fmt(a.dom)}`:"";
+      return `<div class="longrow"><span>${esc(label(a))}${capped}</span>
+        <b>$${fmt(p)}/MW-day${dom}</b></div>
+        <div class="statebar" style="width:${Math.max(2,100*p/max)}%;margin-bottom:4px"></div>
+        ${a.note?`<div class="meta" style="margin:-2px 0 8px">${esc(a.note)}</div>`:""}`;
+    }).join("")+(BURDEN.kpis?`<div class="caveat">
+      Data centers drove <b>${Math.round((BURDEN.kpis.dc_share_of_2526_increase||0)*100)}%</b>
+      of the 2025/26 increase ($${BURDEN.kpis.dc_cost_2526_usd_b||"?"}B); est. Ohio bill impact
+      <b>+$${BURDEN.kpis.oh_monthly_bill_impact_usd||"?"}/mo</b>. PJM capacity-auction clears —
+      the cost-shift receipts.</div>`:`<div class="caveat">PJM capacity auction clears.</div>`);
   }catch(e){el.textContent="—";}
 }
 
