@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRIDWATCH — methodology</title>
+<meta name="description" content="How GRIDWATCH classifies outages, what its controls prove, what data it uses, and what it deliberately does not claim.">
+<style>
+:root{--bg:#0a0c10;--panel:#12151c;--line:#232936;--text:#e8ebf2;--dim:#8a93a6;
+  --accent:#f5a623;--red:#ff5c5c;--green:#3ddc84;--blue:#4c9aff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.7 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px}
+header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:8px}
+.logo{font-weight:800;font-size:20px;letter-spacing:.5px}
+.logo b{color:var(--accent)}
+nav a{margin-right:16px;font-size:13px;color:var(--dim)}
+h1{font-size:26px;margin:28px 0 6px}
+h2{font-size:17px;margin:34px 0 8px;color:var(--accent);
+  border-left:3px solid var(--accent);padding-left:12px}
+h3{font-size:14px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);
+  margin:22px 0 6px}
+p{margin:10px 0}
+.lead{font-size:16px;color:var(--text)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 18px;margin:16px 0}
+.box.warn{border-color:var(--red)}
+.box.ok{border-color:var(--green)}
+code{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:1px 6px;font-size:13px}
+ul{margin:10px 0;padding-left:22px}li{margin:6px 0}
+.dim{color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.t-blue{background:rgba(76,154,255,.15);color:var(--blue)}
+.t-amber{background:rgba(245,166,35,.15);color:var(--accent)}
+.t-red{background:rgba(255,92,92,.15);color:var(--red)}
+.t-pink{background:rgba(244,114,182,.15);color:#f472b6}
+footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);
+  color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">⚡ <b>GRIDWATCH</b> · methodology</div>
+  <nav style="margin-top:10px"><a href="./">← live map</a><a href="#classify">classification</a>
+    <a href="#controls">controls</a><a href="#sources">sources</a><a href="#limits">limits</a></nav>
+</header>
+
+<h1>What this is</h1>
+<p class="lead">GRIDWATCH is a public-interest instrument that asks two questions with public data:
+<b>are regional electricity monopolies becoming less reliable</b>, and <b>is data center
+construction correlated with that decline and with rising costs to ordinary ratepayers.</b></p>
+<p>It polls the live outage maps of 30+ investor-owned utilities from Ohio to Georgia every few
+minutes, attributes each outage to weather or not, measures proximity to data centers in active
+construction, and correlates all of it against the utilities' own reliability metrics, the wholesale
+capacity prices customers pay, and the interconnection pipeline of what is coming next.</p>
+<p>It is built to be <b>argued with</b>. Every classification rule, control, and data source is
+described below, and the instrument is designed to refuse overclaiming — it shows confidence
+intervals and says plainly when the data does not yet support a conclusion.</p>
+
+<h2 id="classify">How outages are classified</h2>
+<p>Every outage the utilities report is placed into one of four buckets, shown as colored dots on
+the map:</p>
+<table>
+<tr><th>tag</th><th>meaning</th></tr>
+<tr><td><span class="tag t-blue">weather-likely</span></td>
+  <td>The outage coincides with adverse weather at its location — recent wind, precipitation, or an
+  active National Weather Service warning/watch. These are expected; storms cause outages.</td></tr>
+<tr><td><span class="tag t-amber">fair-weather</span></td>
+  <td>No adverse weather nearby. An outage in calm conditions points to equipment, capacity, or
+  grid-stress causes rather than nature. <b>This is the signal the project cares about.</b></td></tr>
+<tr><td><span class="tag t-red">near active DC site</span></td>
+  <td>A fair-weather outage within the ring of a data center in <em>active change</em> — under
+  construction, contested, or newly announced. These are counted as evidence.</td></tr>
+<tr><td><span class="tag t-pink">near operating DC (context)</span></td>
+  <td>Near a data center that is already running. Shown for context but <b>never counted as
+  evidence</b> — an operating facility is not construction-phase grid stress.</td></tr>
+</table>
+<p>Weather attribution uses hourly conditions from Open-Meteo (trailing three hours) plus active NWS
+alerts, both keyless public sources. A "fair-weather" label means the classifier found no adverse
+weather — it is a statement about the weather, not a claim about the true cause.</p>
+
+<h2 id="controls">Why the controls matter</h2>
+<div class="box ok">
+<p style="margin-top:0"><b>The honest test.</b> If outages cluster near data-center construction,
+the skeptical explanation is: "that is just where everything is being built — of course the grid is
+disturbed." To separate <em>data centers</em> from <em>construction in general</em>, GRIDWATCH
+tracks <b>control corridors</b>: fast-growing areas with heavy construction and <em>no</em> data
+center.</p>
+<p style="margin-bottom:0">If active-DC sites and control corridors show the same fair-weather
+outage rate, the honest conclusion is "growth corridor," not "data center," and the instrument
+says so. Only a rate that is <em>higher near data centers than near matched controls</em> supports
+the thesis.</p>
+</div>
+<p>The Evidence tab compares the two using <b>95% Wilson confidence intervals</b>. When the intervals
+overlap, it displays "not yet statistically distinguishable — keep collecting." It only reports a
+difference when the intervals separate. A single day is noise; the comparison needs weeks of
+accumulation, and <b>a null result is published exactly as prominently as a positive one.</b></p>
+
+<h2 id="reliability">The monopoly-reliability scorecard</h2>
+<p>Most Americans cannot choose their electricity distributor — a single regulated utility owns the
+wire in each territory. GRIDWATCH pairs each feed with that utility's own
+<b>SAIDI and SAIFI</b> figures reported annually to the U.S. Energy Information Administration:</p>
+<ul>
+<li><b>SAIDI</b> — System Average Interruption Duration Index: the average minutes per year a
+customer spends without power. Higher is worse.</li>
+<li><b>SAIFI</b> — System Average Interruption Frequency Index: the average number of interruptions
+per customer per year.</li>
+</ul>
+<p>These are the industry's <em>own</em> numbers, filed with a federal agency. Ranking captive-customer
+territories by their reported unreliability is not our framing imposed on the data — it is the
+monopolies' self-report, sorted worst-first.</p>
+
+<h2 id="brownouts">Brownouts and grid strain</h2>
+<p>True brownout data — deliberate voltage reductions — is measured at the feeder level and kept
+internal by utilities; <b>no one publishes it.</b> GRIDWATCH uses two honest proxies:</p>
+<ul>
+<li><b>Grid strain</b>: actual electricity demand versus the day-ahead forecast (EIA-930), per grid
+operator. Sustained demand at or above forecast is the condition under which conservation appeals
+and voltage reductions occur. Preliminary (unsettled) recent hours are excluded so the figure is not
+inflated.</li>
+<li><b>Momentary events</b>: outages seen in only a single poll — the standard engineering proxy
+(MAIFI-style) for brief protection events that are brownout-adjacent.</li>
+</ul>
+
+<h2 id="cost">The cost transfer</h2>
+<p>Data centers do not only consume power — their grid connections are frequently paid for through
+rates charged to <em>all</em> customers. GRIDWATCH assembles the receipts: PJM capacity-auction
+clearing prices (what customers pay for guaranteed supply), demand growth in data-center-heavy
+zones, the interconnection queue of requests near tracked sites (what is coming), and retired power
+plants beside those sites (campuses often inherit a dead plant's connection rights). Where a specific
+cost-shift is documented in a regulatory docket, it is listed on the Watch List with its source.</p>
+
+<h2 id="sources">Data sources</h2>
+<table>
+<tr><th>layer</th><th>source</th><th>terms</th></tr>
+<tr><td>Outages</td><td>30+ utility live outage maps</td><td>© respective utilities</td></tr>
+<tr><td>Weather</td><td>Open-Meteo + NWS alerts</td><td>public / public domain</td></tr>
+<tr><td>Reliability (SAIDI/SAIFI)</td><td>EIA-861</td><td>US public domain</td></tr>
+<tr><td>Demand & strain</td><td>EIA-930</td><td>US public domain</td></tr>
+<tr><td>Retirements & additions</td><td>EIA-860M</td><td>US public domain</td></tr>
+<tr><td>Interconnection queue</td><td>PJM public planning queue</td><td>public</td></tr>
+<tr><td>Zone prices (NY)</td><td>NYISO public CSVs</td><td>public</td></tr>
+<tr><td>Grid topology</td><td>OpenStreetMap</td><td>ODbL</td></tr>
+</table>
+<div class="box">
+<p style="margin:0"><b>On grid topology:</b> real node-level transmission data is CEII —
+Critical Energy Infrastructure Information, restricted since 2004. The substations, lines, and plants
+shown here are OpenStreetMap's public reconstruction, labeled as such. GRIDWATCH does not publish
+restricted data.</p>
+</div>
+<div class="box warn">
+<p style="margin:0"><b>On PJM prices:</b> PJM's Data Miner 2 terms prohibit redistribution of derived
+data without a license, so zone-level LMP data is used only privately. The public site uses EIA-930
+(public domain) for the demand signal instead.</p>
+</div>
+
+<h2 id="limits">What GRIDWATCH does not claim</h2>
+<ul>
+<li>It does not claim any specific outage was <em>caused</em> by a data center. It measures
+proximity and weather, and aggregates. Causation is what the controls and confidence intervals are
+there to test, over time.</li>
+<li>"Fair-weather" means no adverse weather was found — not that the cause is known.</li>
+<li>Data center locations flagged <code>verify</code> are best-effort estimates pending parcel
+confirmation; sites marked <em>context-only</em> are plotted but excluded from all evidence math.</li>
+<li><b>Florida and other hurricane-dominated territories are deliberately excluded</b> — storm noise
+would swamp the fair-weather signal. Scope honesty is worth more than coverage.</li>
+<li>The instrument is one person's public-interest project, not an official or utility source. Every
+number links back to its origin so anyone can check it.</li>
+</ul>
+
+<h2>Reproduce it</h2>
+<p>All code and data are open. The poller, configuration, and every emitted dataset live in the
+repository; the raw snapshots are downloadable as <a href="data/latest.json">JSON</a> and
+<a href="data/latest.geojson">GeoJSON</a>, with an <a href="data/feed.xml">RSS</a> digest.
+See the <a href="https://github.com/ParadoxSnowman/gridwatch">source on GitHub</a>.</p>
+
+<footer>
+GRIDWATCH is a public-interest research instrument. It uses public data, shows its methods, and
+publishes null results. Corrections and scrutiny are welcome via the repository.
+</footer>
+</div>
+</body>
+</html>
